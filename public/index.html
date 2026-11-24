@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commando Batch | Defense & Competitive Exam CBT Mock Test Portal</title>
+  <meta name="description" content="Realistic 3D Computer Based Mock Test Platform for SSC, Bank, CAPF (AC), Sub-Inspector (SI), and CRPF/CISF LDCE Departmental Examinations.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Rajdhani:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/cbt.css">
+
+  <!-- Three.js for 3D Realistic Badge -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Announcement Strip -->
+  <div class="top-ticker">
+    <div class="container ticker-content">
+      <div>
+        <span class="ticker-badge">LIVE CBT</span>
+        <span>CRPF & CISF ASI/SI LDCE 2026, CAPF AC, SSC CPO SI & Bank PO Full Mock Tests are active!</span>
+      </div>
+      <div style="font-size: 0.75rem; color: #fde047;">
+        TCS iON Examination Engine v2.0
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Navigation Bar -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <!-- Brand Logo & Motto -->
+      <a class="brand" onclick="App.switchView('homeView')">
+        <svg class="brand-insignia" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Outer Shield with Gold & Bronze Gradient -->
+          <defs>
+            <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#fbbf24" />
+              <stop offset="50%" stop-color="#d97706" />
+              <stop offset="100%" stop-color="#78350f" />
+            </linearGradient>
+            <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="100%" stop-color="#fbbf24" />
+            </linearGradient>
+          </defs>
+          <path d="M50 5 L88 22 L88 55 C88 75 50 95 50 95 C50 95 12 75 12 55 L12 22 Z" fill="#0f1f17" stroke="url(#shieldGrad)" stroke-width="4" />
+          <path d="M50 12 L80 26 L80 52 C80 68 50 85 50 85 C50 85 20 68 20 52 L20 26 Z" fill="none" stroke="#d4af37" stroke-width="1.5" stroke-dasharray="3,2" />
+          <!-- Crossed Daggers -->
+          <line x1="25" y1="25" x2="75" y2="75" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" />
+          <line x1="75" y1="25" x2="25" y2="75" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" />
+          <!-- Central Defense Star -->
+          <polygon points="50,28 55,42 70,42 58,52 62,66 50,57 38,66 42,52 30,42 45,42" fill="url(#starGrad)" stroke="#b45309" stroke-width="1.5" />
+          <!-- Central Gem -->
+          <circle cx="50" cy="50" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
+        </svg>
+        <div class="brand-text">
+          <h1>COMMANDO <span>BATCH</span></h1>
+          <span class="brand-tagline">वीरता • अनुशासन • सफलता</span>
+        </div>
+      </a>
+
+      <!-- Navigation Links -->
+      <nav class="nav-links">
+        <button class="nav-btn active" data-view="homeView">Home</button>
+        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('testsSection').scrollIntoView({behavior:'smooth'})">Mock Tests</button>
+        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('packagesSection').scrollIntoView({behavior:'smooth'})">🎖️ Test Passes (From ₹100)</button>
+        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('enquirySection').scrollIntoView({behavior:'smooth'})">💬 Exam Enquiry</button>
+        <button class="nav-btn" id="navStudentLink" data-view="studentView" style="display: none;">Student Panel</button>
+        <button class="nav-btn" id="navAdminLink" data-view="adminView" style="display: none; border-color: #ef4444; color: #f87171;">🛡️ Admin Panel</button>
+      </nav>
+
+      <!-- Auth Actions -->
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <!-- Guest Actions -->
+        <div id="navGuestActions" style="display: flex; gap: 0.65rem;">
+          <button class="btn-demo-pill" onclick="App.openAuthModal('login')">Candidate Login</button>
+          <button class="btn-demo-pill" style="border-color: #ef4444; color: #fca5a5;" onclick="App.openAuthModal('admin-login')">🛡️ Admin Login</button>
+          <button class="btn-3d" style="padding: 0.45rem 1.1rem; font-size: 0.9rem;" onclick="App.openAuthModal('register')">Register Free</button>
+        </div>
+
+        <!-- Logged-in User Pill -->
+        <div id="navUserActions" style="display: none; align-items: center; gap: 0.75rem;">
+          <div class="user-pill" onclick="App.switchView('studentView')">
+            <div class="user-badge" id="navUserBadge">C</div>
+            <div class="user-info-text">
+              <span class="uname" id="navUserName">Candidate</span>
+              <span class="urole" id="navUserRole">LDCE ASPIRANT</span>
+            </div>
+          </div>
+          <button class="btn-demo-pill" style="border-color: #ef4444; color: #f87171;" onclick="App.handleLogout()">Logout</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Real-time Paused CBT Mock Test Banner -->
+  <div id="cbtPausedBanner" class="cbt-paused-banner" style="display: none;"></div>
+
+  <!-- ======================================================================
+       VIEW 1: HOME & TEST CATALOG VIEW
+       ====================================================================== -->
+  <main id="homeView">
+    <!-- 3D Realistic Hero Section with CAPF Combat Background Slides -->
+    <section class="hero-section" id="heroSection">
+      <!-- Dynamic CAPF Combat Background Slideshow Container (Authentic Indian Armed Forces Personnel) -->
+      <div class="hero-slideshow" id="heroSlideshow">
+        <div class="hero-slide active" style="background-image: url('images/crpf_cobra_commandos.jpg');" data-index="1" data-caption="CRPF CoBRA COMMANDO FORCE • JUNGLE COMBAT & COUNTER-INSURGENCY BATTALION">
+          <div class="slide-tint camo-tint"></div>
+        </div>
+        <div class="hero-slide" style="background-image: url('images/bsf_soldier.jpg');" data-index="2" data-caption="BSF BORDER SECURITY FORCE • ARMED COMBAT SOLDIER ON BORDER PATROL">
+          <div class="slide-tint desert-tint"></div>
+        </div>
+        <div class="hero-slide" style="background-image: url('images/cisf_contingent.jpg');" data-index="3" data-caption="CISF CENTRAL INDUSTRIAL SECURITY FORCE • ARMED MARCHING CONTINGENT & ASG">
+          <div class="slide-tint urban-tint"></div>
+        </div>
+        <div class="hero-slide" style="background-image: url('images/itbp_personnel.jpg');" data-index="4" data-caption="ITBP INDO-TIBETAN BORDER POLICE • HIGH-ALTITUDE HIMALAYAN BORDER DEFENSE">
+          <div class="slide-tint snow-tint"></div>
+        </div>
+        <div class="hero-slide" style="background-image: url('images/assam_rifles_soldier.jpg');" data-index="5" data-caption="ASSAM RIFLES SENTINELS OF NORTHEAST • JUNGLE COMBAT PATROL & HIGHLAND VIGIL">
+          <div class="slide-tint jungle-tint"></div>
+        </div>
+        <div class="hero-slide" style="background-image: url('images/bsf_camel_contingent.jpg');" data-index="6" data-caption="BSF DESERT BORDER COMBAT CONTINGENT • THAR SECTOR INTERNATIONAL BORDER OUTPOST">
+          <div class="slide-tint night-tint"></div>
+        </div>
+      </div>
+
+      <!-- Tactical Vignette & Grid Layers -->
+      <div class="hero-vignette-overlay"></div>
+      <div class="tactical-grid"></div>
+
+      <!-- CAPF Combat Slideshow Tactical HUD Bar -->
+      <div class="combat-slider-hud">
+        <div class="hud-caption-box">
+          <span class="hud-live-beacon"></span>
+          <span class="hud-capf-tag">CAPF COMBAT RECON:</span>
+          <span class="hud-caption-text" id="combatSlideCaption">CRPF CoBRA COMMANDO FORCE • JUNGLE COMBAT & COUNTER-INSURGENCY BATTALION</span>
+        </div>
+        <div class="hud-controls-box">
+          <button class="hud-nav-btn" onclick="App.prevCombatSlide()" title="Previous Combat Picture">❮</button>
+          <div class="hud-dots-bar" id="combatSlideDots">
+            <span class="hud-dot active" onclick="App.goToCombatSlide(0)"></span>
+            <span class="hud-dot" onclick="App.goToCombatSlide(1)"></span>
+            <span class="hud-dot" onclick="App.goToCombatSlide(2)"></span>
+            <span class="hud-dot" onclick="App.goToCombatSlide(3)"></span>
+            <span class="hud-dot" onclick="App.goToCombatSlide(4)"></span>
+            <span class="hud-dot" onclick="App.goToCombatSlide(5)"></span>
+          </div>
+          <span class="hud-counter" id="combatSlideCounter">01 / 06</span>
+          <button class="hud-nav-btn" onclick="App.nextCombatSlide()" title="Next Combat Picture">❯</button>
+          <button class="hud-nav-btn hud-play-btn" id="combatSlidePlayBtn" onclick="App.toggleCombatSlider()" title="Pause/Play Slideshow">⏸️</button>
+        </div>
+      </div>
+
+      <div class="container hero-content">
+        <!-- Hero Left Pitch -->
+        <div class="hero-left">
+          <div class="hero-badge-strip">
+            <span style="font-size: 1rem;">🇮🇳</span>
+            <span class="force-tag">CRPF • BSF • CISF • ITBP • SSB • ASSAM RIFLES • DELHI POLICE SI</span>
+          </div>
+
+          <h1 class="hero-title">
+            COMMANDO BATCH <br>
+            <span class="highlight">DEFENSE & COMPETITIVE</span> <br>
+            EXAM PORTAL
+          </h1>
+
+          <p class="hero-desc">
+            Empowering serving paramilitary personnel and young aspirants for <strong>CISF ASI/SI LDCE, CRPF SI LDCE, UPSC CAPF (AC), SSC CPO SI, CGL, and Bank PO</strong> with strict TCS iON Computer Based Test (CBT) simulation and instant defense scorecards.
+          </p>
+
+          <div class="hero-actions">
+            <button class="btn-3d" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'})">
+              🎯 Attempt Mock Tests
+            </button>
+            <button class="btn-3d btn-3d-secondary" onclick="document.getElementById('packagesSection').scrollIntoView({behavior: 'smooth'})">
+              ⭐ Test Passes (From ₹100)
+            </button>
+            <button class="btn-demo-pill" style="margin-left: 0.5rem; border-color: rgba(16, 185, 129, 0.4); color: #86efac;" onclick="App.openAuthModal('login')">
+              💂 Candidate Login
+            </button>
+          </div>
+        </div>
+
+        <!-- Hero Right 3D Interactive Canvas -->
+        <div class="hero-right">
+          <div class="canvas-3d-container" id="threeCanvasContainer">
+            <!-- Three.js Metallic Commando Emblem Renders Here -->
+          </div>
+          <div class="emblem-glass-card">
+            <div class="motto">PROTECTING SOVEREIGNTY THROUGH KNOWLEDGE</div>
+            <div class="forces-list">CRPF • BSF • CISF • ITBP • SSB • ASSAM RIFLES • NSG</div>
+            <div class="forces-full-names">CENTRAL RESERVE POLICE FORCE • BORDER SECURITY FORCE • CENTRAL INDUSTRIAL SECURITY FORCE • INDO-TIBETAN BORDER POLICE • SASHASTRA SEEMA BAL • ASSAM RIFLES</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mock Tests Catalog Section -->
+    <section class="container" id="testsSection" style="padding-top: 3.5rem;">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-family: var(--font-military); color: var(--gold-bright); font-size: 0.85rem; letter-spacing: 1px;">EXAMINATION ARENA</span>
+          <h2 style="font-size: 2.25rem; color: #fff;">AVAILABLE CBT MOCK TESTS</h2>
+        </div>
+        <div style="color: #94a3b8; font-size: 0.9rem;">
+          Accurate TCS iON marking schemes with real negative scoring
+        </div>
+      </div>
+
+      <!-- Categories Filter Bar -->
+      <div class="categories-bar">
+        <button class="cat-pill active" data-cat="all" onclick="App.loadTests('all')">
+          <span>🌟</span> All Tests (32)
+        </button>
+        <button class="cat-pill" data-cat="paid" onclick="App.loadTests('paid')">
+          <span>🔒</span> Paid Section (30 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="crpf" onclick="App.loadTests('crpf')">
+          <span>🔴</span> CRPF (6 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="cisf" onclick="App.loadTests('cisf')">
+          <span>🟡</span> CISF (6 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="bsf" onclick="App.loadTests('bsf')">
+          <span>🟠</span> BSF (5 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="itbp" onclick="App.loadTests('itbp')">
+          <span>🔵</span> ITBP (5 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="ssb" onclick="App.loadTests('ssb')">
+          <span>🟢</span> SSB (4 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="ar" onclick="App.loadTests('ar')">
+          <span>🟤</span> Assam Rifles & AC (4 Mocks)
+        </button>
+        <button class="cat-pill" data-cat="ldce" onclick="App.loadTests('ldce')">
+          <span>🎖️</span> LDCE General
+        </button>
+        <button class="cat-pill" data-cat="si" onclick="App.loadTests('si')">
+          <span>⭐</span> Sub-Inspector & SSC
+        </button>
+      </div>
+
+      <!-- Tests Grid -->
+      <div class="tests-grid" id="testsGrid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         MOCK TEST PACKAGES SECTION (₹100 2-Month / ₹199 6-Month)
+         ====================================================================== -->
+    <section class="container" id="packagesSection" style="padding-top: 4.5rem; padding-bottom: 2rem;">
+      <div style="text-align: center; max-width: 780px; margin: 0 auto 3rem auto;">
+        <span class="packages-sub-badge">DEFENSE ASPIRANT EXAM PASSES</span>
+        <h2 class="packages-main-heading">CBT MOCK TEST PACKAGES</h2>
+        <p style="color: #94a3b8; font-size: 1rem; margin-top: 0.6rem;">
+          Enroll in affordable mock test passes crafted specifically for CAPF Force Personnel (CRPF, CISF, BSF, ITBP, Assam Rifles, SSB), SSC CPO SI, and Bank PO aspirants.
+        </p>
+      </div>
+
+      <div class="packages-grid">
+        <!-- Package 1: ₹100 for 2 Months (10 Tests) -->
+        <div class="package-card-3d" id="pkgCard100">
+          <div class="pkg-top-tag standard-tag">TACTICAL PASS</div>
+          <div class="pkg-header">
+            <h3 class="pkg-title">2 MONTHS PASS</h3>
+            <p class="pkg-desc">Focused test series pass for upcoming examination revision and departmental promotion tests.</p>
+          </div>
+
+          <div class="pkg-price-row">
+            <span class="currency-sym">₹</span>
+            <span class="price-val">100</span>
+            <span class="duration-tag">/ 2 Months</span>
+          </div>
+
+          <div class="pkg-quota-badge">
+            <span class="quota-icon">🎯</span>
+            <span><strong>10 Full-Length</strong> CBT Mock Tests</span>
+          </div>
+
+          <ul class="pkg-features-list">
+            <li><span class="check-icon">✓</span> <strong>10 Full-Length Mock Tests</strong> (SSC CPO SI, CAPF LDCE, Bank)</li>
+            <li><span class="check-icon">✓</span> <strong>2 Months Complete Validity</strong> with unlimited re-attempts</li>
+            <li><span class="check-icon">✓</span> <strong>Official TCS iON Simulator</strong> with bilingual English/Hindi questions</li>
+            <li><span class="check-icon">✓</span> <strong>Real Negative Marking Schemes</strong> (-0.25 / -0.50) & countdown timer</li>
+            <li><span class="check-icon">✓</span> <strong>Instant Marks Obtained</strong> (Positive, Negative, Accuracy, Rank)</li>
+            <li><span class="check-icon">✓</span> <strong>Detailed Bilingual Solutions</strong> & full explanation keys</li>
+            <li><span class="check-icon">✓</span> <strong>Printable Candidate Scorecard</strong> & Performance Certificate</li>
+          </ul>
+
+          <div class="pkg-action-wrap">
+            <button class="btn-3d btn-3d-secondary pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_100_2m')">
+              ⚡ Enroll in 2-Month Pass • ₹100
+            </button>
+          </div>
+        </div>
+
+        <!-- Package 2: ₹199 for 6 Months (20 Tests) - Featured -->
+        <div class="package-card-3d popular-pkg" id="pkgCard199">
+          <div class="pkg-popular-ribbon">🔥 BEST VALUE • MOST POPULAR</div>
+          <div class="pkg-top-tag pro-tag">COMMANDO PRO PASS</div>
+          <div class="pkg-header">
+            <h3 class="pkg-title">6 MONTHS PRO PASS</h3>
+            <p class="pkg-desc">Complete seasonal pass covering all major defense & competitive recruitment exams over 6 months.</p>
+          </div>
+
+          <div class="pkg-price-row">
+            <span class="currency-sym">₹</span>
+            <span class="price-val">199</span>
+            <span class="duration-tag">/ 6 Months</span>
+          </div>
+
+          <div class="pkg-quota-badge popular-quota">
+            <span class="quota-icon">🎖️</span>
+            <span><strong>20 Full-Length</strong> CBT Mock Tests</span>
+          </div>
+
+          <ul class="pkg-features-list">
+            <li><span class="check-icon gold-check">✓</span> <strong>20 Full-Length Mock Tests</strong> across all target exams</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>6 Months Complete Validity</strong> for multi-exam cycles</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>All CAPFs Included</strong> (CRPF, CISF, BSF, ITBP, Assam Rifles, SSB)</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>SSC CPO SI, CGL & Bank PO</strong> Full Syllabus Papers</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>MHA Service Regulations & Minor Acts</strong> In-depth coverage</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>All-India Live Rank</strong> & National Percentile Benchmark</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>Deep Diagnostic Analytics</strong> (Time per question, speed ratio)</li>
+            <li><span class="check-icon gold-check">✓</span> <strong>Priority Solved Doubts</strong> & Verified Answer Explanations</li>
+          </ul>
+
+          <div class="pkg-action-wrap">
+            <button class="btn-3d pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_199_6m')">
+              👑 Unlock 6-Month Pro Pass • ₹199
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paid Section Force-Wise Tests Showcase -->
+      <div class="paid-forces-showcase">
+        <div class="paid-forces-header">
+          <div style="display: flex; align-items: center; gap: 0.85rem;">
+            <div style="width: 48px; height: 48px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 1.6rem;">
+              ⚔️
+            </div>
+            <div>
+              <h3 style="color: #fff; font-size: 1.35rem; margin: 0; font-family: var(--font-military); letter-spacing: 0.5px;">30 FULL-LENGTH CAPF FORCE-WISE MOCKS INCLUDED</h3>
+              <p style="color: #94a3b8; font-size: 0.88rem; margin: 0.25rem 0 0 0;">All 30 tests unlocked instantly with Tactical Pass (₹100) or Commando Pro Pass (₹199)</p>
+            </div>
+          </div>
+          <button class="btn-3d" style="padding: 0.65rem 1.4rem; font-size: 0.88rem; white-space: nowrap;" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('paid');">
+            ⚡ Browse 30 Paid Mocks ➔
+          </button>
+        </div>
+
+        <div class="forces-badges-grid">
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('crpf');">
+            <div class="force-badge-icon crpf-icon">🔴</div>
+            <div class="force-badge-text">
+              <strong>CRPF (6 Mocks)</strong>
+              <span>CRPF Act 1949 • CoBRA • Riot Control</span>
+            </div>
+          </div>
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('cisf');">
+            <div class="force-badge-icon cisf-icon">🟡</div>
+            <div class="force-badge-text">
+              <strong>CISF (6 Mocks)</strong>
+              <span>CISF Act 1968 • ASG Aviation • PIDS</span>
+            </div>
+          </div>
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('bsf');">
+            <div class="force-badge-icon bsf-icon">🟠</div>
+            <div class="force-badge-text">
+              <strong>BSF (5 Mocks)</strong>
+              <span>BSF Act 1968 • BOP Defense • Creeks</span>
+            </div>
+          </div>
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('itbp');">
+            <div class="force-badge-icon itbp-icon">🔵</div>
+            <div class="force-badge-text">
+              <strong>ITBP (5 Mocks)</strong>
+              <span>ITBP Act 1992 • High Altitude • LAC</span>
+            </div>
+          </div>
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('ssb');">
+            <div class="force-badge-icon ssb-icon">🟢</div>
+            <div class="force-badge-text">
+              <strong>SSB (4 Mocks)</strong>
+              <span>SSB Act 2007 • Nepal/Bhutan • HUMINT</span>
+            </div>
+          </div>
+          <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('ar');">
+            <div class="force-badge-icon ar-icon">🟤</div>
+            <div class="force-badge-text">
+              <strong>Assam Rifles & AC (4 Mocks)</strong>
+              <span>AR Act 2006 • Jungle Warfare • UPSC CAPF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Defense Architecture Features Section -->
+    <section class="defense-features">
+      <div class="container">
+        <div style="text-align: center; max-width: 720px; margin: 0 auto;">
+          <span style="font-family: var(--font-military); color: var(--camo-green); letter-spacing: 2px;">TACTICAL EXAM ADVANTAGE</span>
+          <h2 style="font-size: 2.2rem; color: #fff; margin-top: 0.3rem;">ENGINEERED FOR ASPIRANTS & DEFENSE PERSONNEL</h2>
+          <p style="color: #94a3b8; font-size: 0.95rem; margin-top: 0.5rem;">
+            Designed specifically for competitive exam candidates and active force members appearing for departmental promotion exams.
+          </p>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-box">
+            <div class="feature-icon">⏱️</div>
+            <h3>Exact TCS iON CBT Simulator</h3>
+            <p>
+              Experience the official interface used by SSC, NTA, and CAPF recruitment boards with the authentic 5-color question palette, countdown timer, and section navigations.
+            </p>
+          </div>
+
+          <div class="feature-box">
+            <div class="feature-icon">⚖️</div>
+            <h3>All CAPF Service Rules & Acts</h3>
+            <p>
+              Complete coverage of <strong>CRPF Act 1949 & Rules 1955</strong>, <strong>BSF Act 1968 & Rules 1969</strong>, <strong>CISF Act 1968 & Rules 2001</strong>, <strong>ITBP Act 1992 & Rules 1994</strong>, <strong>SSB Act 2007 & Rules 2009</strong>, <strong>Assam Rifles Act 2006 & Rules 2010</strong>, <strong>NSG Act 1986</strong>, IPC/BNS (96-106), and CrPC/BNSS Sec 100.
+            </p>
+          </div>
+
+          <div class="feature-box">
+            <div class="feature-icon">🌐</div>
+            <h3>Bilingual English & Hindi</h3>
+            <p>
+              Switch questions between English and Hindi with a single click during active tests. View full detailed bilingual solutions and legal explanations afterwards.
+            </p>
+          </div>
+
+          <div class="feature-box">
+            <div class="feature-icon">🎖️</div>
+            <h3>Defense Grade Scorecards</h3>
+            <p>
+              Get immediate detailed scorecards featuring All-India percentile, speed per question, subject-wise accuracy, and printable candidate certificates.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         CANDIDATE EXAM ENQUIRY & HELPDESK PANEL
+         ====================================================================== -->
+    <section class="enquiry-section" id="enquirySection">
+      <div class="container">
+        <div style="text-align: center; max-width: 780px; margin: 0 auto 3rem auto;">
+          <span class="enquiry-sub-badge">🇮🇳 CANDIDATE ADVISORY & EXAM HELPDESK</span>
+          <h2 class="enquiry-main-heading">CANDIDATE EXAM ENQUIRY PANEL</h2>
+          <p style="color: #94a3b8; font-size: 1rem; margin-top: 0.6rem;">
+            Have questions regarding upcoming SSC CPO Sub-Inspector, CAPF LDCE promotional exams, syllabus coverage, or test passes? Submit your enquiry below for direct guidance from our defense advisory team.
+          </p>
+        </div>
+
+        <div class="enquiry-grid">
+          <!-- Left Column: Official Helpdesk Info & Advisory Badges -->
+          <div class="enquiry-info-card">
+            <div class="enquiry-info-header">
+              <span style="font-size: 2.2rem;">🛡️</span>
+              <div>
+                <h3 style="color: #ffffff; font-size: 1.3rem; margin: 0;">Paramilitary & Defense Advisory Desk</h3>
+                <p style="color: var(--gold-bright); font-size: 0.85rem; margin: 0.2rem 0 0 0; font-family: var(--font-military);">MHA & SSC RECRUITMENT ASSISTANCE</p>
+              </div>
+            </div>
+
+            <div class="enquiry-channels-list">
+              <div class="enquiry-channel-item">
+                <div class="channel-icon">📞</div>
+                <div class="channel-details">
+                  <span class="channel-title">Toll-Free Paramilitary Helpline</span>
+                  <span class="channel-val">1800-COMMANDO (1800-266-6263)</span>
+                </div>
+              </div>
+
+              <div class="enquiry-channel-item">
+                <div class="channel-icon">💬</div>
+                <div class="channel-details">
+                  <span class="channel-title">WhatsApp Exam Counseling</span>
+                  <span class="channel-val">+91 98765 43210 (24x7 WhatsApp Desk)</span>
+                </div>
+              </div>
+
+              <div class="enquiry-channel-item">
+                <div class="channel-icon">✉️</div>
+                <div class="channel-details">
+                  <span class="channel-title">Official Exam Support Email</span>
+                  <span class="channel-val">helpdesk@commandobatch.gov.in</span>
+                </div>
+              </div>
+
+              <div class="enquiry-channel-item">
+                <div class="channel-icon">⏰</div>
+                <div class="channel-details">
+                  <span class="channel-title">Live Counseling Hours</span>
+                  <span class="channel-val">08:00 hrs – 21:00 hrs (Monday through Sunday)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="enquiry-advisory-box">
+              <h4 style="color: #fbbf24; font-size: 0.92rem; margin-bottom: 0.5rem; font-family: var(--font-military);">🎯 Common Areas We Assist With:</h4>
+              <ul style="color: #cbd5e1; font-size: 0.85rem; padding-left: 1.2rem; line-height: 1.6; margin: 0;">
+                <li>CISF ASI/Exe & CRPF SI (GD) LDCE Eligibility & Service Rules</li>
+                <li>BSF, ITBP, SSB & Assam Rifles Border Law Syllabus</li>
+                <li>TCS iON CBT Interface Navigation & Negative Marking Strategy</li>
+                <li>Mock Test Passes (₹100 Tactical / ₹199 Commando Pro Pass)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Enquiry Form -->
+          <div class="enquiry-form-card">
+            <h3 style="color: #ffffff; font-size: 1.35rem; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📨</span> Submit Your Exam Enquiry
+            </h3>
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1.5rem;">
+              Please provide your details below. Our defense examination counseling officers will review your query and reach out promptly.
+            </p>
+
+            <form id="formEnquiry" onsubmit="App.handleEnquirySubmit(event)">
+              <div class="form-group">
+                <label class="form-label">Candidate Full Name <span style="color:#ef4444;">*</span></label>
+                <input type="text" id="enquiryName" class="form-input" placeholder="e.g. Vikram Batra / Rahul Sharma" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+                <div class="form-group">
+                  <label class="form-label">Phone Number <span style="color:#ef4444;">*</span></label>
+                  <input type="tel" id="enquiryPhone" class="form-input" placeholder="e.g. 9876543210" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email Address <span style="color:#ef4444;">*</span></label>
+                  <input type="email" id="enquiryEmail" class="form-input" placeholder="candidate@example.in" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Target Examination / Armed Force</label>
+                <select id="enquiryTargetExam" class="form-select">
+                  <option value="SSC CPO Sub-Inspector">SSC CPO Sub-Inspector (Delhi Police & CAPFs)</option>
+                  <option value="CISF ASI/Exe LDCE">CISF ASI/Exe & Sub-Inspector LDCE</option>
+                  <option value="CRPF SI (GD) LDCE">CRPF SI (GD) LDCE Tactical Law</option>
+                  <option value="BSF & ITBP SI LDCE">BSF & ITBP Sub-Inspector LDCE</option>
+                  <option value="SSB & Assam Rifles LDCE">SSB & Assam Rifles Departmental Promotion</option>
+                  <option value="UPSC CAPF (AC)">UPSC CAPF Assistant Commandant (Paper 1 & 2)</option>
+                  <option value="Mock Test Passes (₹100/₹199)">Mock Test Passes & Pricing (₹100 / ₹199)</option>
+                  <option value="General Defense Inquiry">Other Defense Examination Query</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Your Query / Question Details <span style="color:#ef4444;">*</span></label>
+                <textarea id="enquiryMessage" class="form-input" rows="4" placeholder="Describe your query regarding exam syllabus, test schedule, pass activation, service rules, or preparation strategy..." required style="resize: vertical;"></textarea>
+              </div>
+
+              <button type="submit" class="btn-3d btn-3d-success" id="btnSubmitEnquiry" style="width: 100%; font-size: 1rem; padding: 0.75rem;">
+                ⚡ Submit Exam Enquiry & Request Callback
+              </button>
+            </form>
+
+            <div id="enquirySuccessCard" class="enquiry-success-card" style="display: none;">
+              <!-- Dynamic confirmation after submission -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================================================================
+       VIEW 2: STUDENT PANEL (DASHBOARD)
+       ====================================================================== -->
+  <section id="studentView" class="container panel-wrapper" style="display: none;">
+    <div id="studentDashboardContainer">
+      <!-- Injected by app.js -->
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       VIEW 3: ADMIN HQ CONTROL PANEL
+       ====================================================================== -->
+  <section id="adminView" class="container panel-wrapper" style="display: none;">
+    <div id="adminPanelContainer">
+      <!-- Injected by admin.js -->
+    </div>
+  </section>
+
+
+  <!-- ======================================================================
+       VIEW 4: SCORECARD & DETAILED MARKS ANALYSIS
+       ====================================================================== -->
+  <section id="scorecardView" class="container" style="display: none;">
+    <div id="scorecardContainer">
+      <!-- Injected by scorecard.js -->
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       FOOTER
+       ====================================================================== -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <h3>COMMANDO BATCH PORTAL</h3>
+          <p>
+            India's premier tactical exam simulator for paramilitary personnel and national defense aspirants. Committed to merit, discipline, and national security service.
+          </p>
+          <div style="margin-top: 1rem; color: var(--gold-bright); font-family: var(--font-military); font-size: 0.85rem;">
+            CRPF • BSF • CISF • ITBP • SSB • ASSAM RIFLES • NSG • DELHI POLICE
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <h4>Target Examinations</h4>
+          <ul>
+            <li><a href="#" onclick="App.loadTests('ldce'); return false;">BSF & ITBP SI LDCE</a></li>
+            <li><a href="#" onclick="App.loadTests('ldce'); return false;">CISF ASI/Exe LDCE</a></li>
+            <li><a href="#" onclick="App.loadTests('ldce'); return false;">CRPF SI (GD) LDCE</a></li>
+            <li><a href="#" onclick="App.loadTests('ldce'); return false;">SSB & Assam Rifles LDCE</a></li>
+            <li><a href="#" onclick="App.loadTests('capf'); return false;">UPSC CAPF (AC) All Forces</a></li>
+            <li><a href="#" onclick="App.loadTests('si'); return false;">SSC CPO Sub-Inspector</a></li>
+            <li><a href="#" onclick="App.loadTests('ssc'); return false;">SSC CGL Tier-1 & Tier-2</a></li>
+            <li><a href="#" onclick="App.loadTests('bank'); return false;">SBI & IBPS Bank PO</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Candidate Portal</h4>
+          <ul>
+            <li><a href="#" onclick="App.openAuthModal('register'); return false;">New Registration</a></li>
+            <li><a href="#" onclick="App.openAuthModal('login'); return false;">Candidate Login</a></li>
+            <li><a href="#" onclick="App.openAuthModal('admin-login'); return false;" style="color: #f87171;">🛡️ HQ Admin Control Login</a></li>
+            <li><a href="#" onclick="App.switchView('studentView'); return false;">My Scorecards</a></li>
+            <li><a href="#" onclick="document.getElementById('packagesSection').scrollIntoView({behavior: 'smooth'}); return false;">Test Passes (₹100 & ₹199)</a></li>
+            <li><a href="#" onclick="App.switchView('homeView'); document.getElementById('enquirySection').scrollIntoView({behavior: 'smooth'}); return false;" style="color: #60a5fa;">💬 Exam Enquiry & Helpdesk</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Security & Protocol</h4>
+          <p style="font-size: 0.85rem; color: #94a3b8; line-height: 1.6;">
+            All questions adhere strictly to the latest service regulations, legal statutes, and recruitment guidelines issued by Ministry of Home Affairs (MHA) & Staff Selection Commission.
+          </p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          © 2026 COMMANDO BATCH • Defense & Paramilitary Mock Test Platform. All rights reserved.
+        </div>
+        <div>
+          Built with 3D Realism & Official TCS iON CBT Standard
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ======================================================================
+       MODALS
+       ====================================================================== -->
+  <!-- Auth Modal (Login / Register) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-box">
+      <button class="modal-close-btn" onclick="App.closeAuthModal()">✕</button>
+
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <span style="font-size: 2.2rem;">💂</span>
+        <h2 style="color: #fff; font-size: 1.6rem; margin-top: 0.2rem;">COMMANDO BATCH AUTHENTICATION</h2>
+        <p style="color: #94a3b8; font-size: 0.85rem;">Official Paramilitary & Defense Candidate Arena</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" id="authTabLogin" onclick="App.setAuthMode('login')">Candidate Login</button>
+        <button class="auth-tab-btn" id="authTabAdminLogin" onclick="App.setAuthMode('admin-login')" style="color: #fca5a5;">🛡️ Admin HQ Login</button>
+        <button class="auth-tab-btn" id="authTabRegister" onclick="App.setAuthMode('register')">New Registration</button>
+      </div>
+
+      <!-- Candidate Login Form -->
+      <form id="formLogin" onsubmit="App.handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Candidate Email Address</label>
+          <input type="email" id="loginEmail" class="form-input" placeholder="e.g. commando@student.in" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-3d" style="width: 100%; margin-top: 0.5rem;">
+          ⚡ Enter Candidate Arena
+        </button>
+      </form>
+
+      <!-- Admin Login Form (Strictly Restricted to Authorized HQ Admins) -->
+      <form id="formAdminLogin" onsubmit="App.handleAdminLogin(event)" style="display: none;">
+        <div style="background: rgba(220,38,38,0.12); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.65rem;">
+          <span style="font-size: 1.4rem;">🔒</span>
+          <div style="font-size: 0.8rem; color: #fca5a5; line-height: 1.35;">
+            <strong style="color: #ef4444; letter-spacing: 0.5px;">RESTRICTED AREA:</strong> Only authorized HQ Administrators are permitted to log in through this portal. Regular candidates cannot log in here.
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">HQ Admin Email Address</label>
+          <input type="email" id="adminLoginEmail" class="form-input" placeholder="admin@commandobatch.gov.in" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Admin Security Password</label>
+          <input type="password" id="adminLoginPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-3d" style="width: 100%; margin-top: 0.5rem; background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%); border-color: #ef4444;">
+          🛡️ Authenticate & Enter Admin Panel
+        </button>
+      </form>
+
+      <!-- Registration Form -->
+      <form id="formRegister" onsubmit="App.handleRegister(event)" style="display: none;">
+        <div class="form-group">
+          <label class="form-label">Full Name & Rank</label>
+          <input type="text" id="regName" class="form-input" placeholder="e.g. Sub-Inspector Rakesh Kumar" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="regEmail" class="form-input" placeholder="rakesh@bsf.gov.in" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target Examination</label>
+          <select id="regTargetExam" class="form-select">
+            <option value="SSC CPO SI">SSC CPO Sub-Inspector (Delhi Police & CAPFs)</option>
+            <option value="BSF SI/Exe LDCE">BSF Sub-Inspector LDCE</option>
+            <option value="ITBP SI/GD LDCE">ITBP Sub-Inspector (GD) LDCE</option>
+            <option value="Assam Rifles LDCE">Assam Rifles Departmental Promotion</option>
+            <option value="CISF ASI/Exe LDCE">CISF ASI / Sub-Inspector LDCE</option>
+            <option value="CRPF SI (GD) LDCE">CRPF SI (GD) LDCE</option>
+            <option value="CAPF (AC)">UPSC CAPF Assistant Commandant</option>
+            <option value="SSC CGL">SSC CGL Tier-1</option>
+            <option value="Bank PO">Bank PO (SBI / IBPS)</option>
+          </select>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-group">
+            <label class="form-label">Armed Force / Wing</label>
+            <select id="regForce" class="form-select">
+              <option value="BSF (Border Security Force)">BSF (Border Security Force)</option>
+              <option value="Assam Rifles">Assam Rifles (Sentinels of the Northeast)</option>
+              <option value="ITBP (Indo-Tibetan Border Police)">ITBP (Indo-Tibetan Border Police)</option>
+              <option value="CRPF (Central Reserve Police Force)">CRPF (Central Reserve Police Force)</option>
+              <option value="CISF (Central Industrial Security Force)">CISF (Central Industrial Security Force)</option>
+              <option value="SSB (Sashastra Seema Bal)">SSB (Sashastra Seema Bal)</option>
+              <option value="Delhi Police SI">Delhi Police Sub-Inspector</option>
+              <option value="National Security Guard (NSG)">National Security Guard (NSG)</option>
+              <option value="Other Defense Force">Other Defense / Armed Force</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="tel" id="regPhone" class="form-input" placeholder="e.g. 9876543210">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Set Password</label>
+          <input type="password" id="regPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-3d btn-3d-success" style="width: 100%; margin-top: 0.5rem;">
+          🎖️ Create Account & Get Roll Number
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- General Purpose Modal (Question Paper, Test Package Enrollment, Submit Confirmation) -->
+  <div class="modal-overlay" id="generalModal">
+    <div class="modal-box" style="max-width: 780px;">
+      <button class="modal-close-btn" onclick="App.closeGeneralModal()">✕</button>
+      <div id="generalModalContent">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen CBT Examination Simulator Container -->
+  <div id="cbtModal" class="modal-overlay" style="padding: 0; background: #0f172a;">
+    <!-- Injected dynamically by cbtEngine.js -->
+  </div>
+
+  <!-- Toast Notification Hub -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- App Scripts -->
+  <script src="js/threeBadge.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cbtEngine.js"></script>
+  <script src="js/scorecard.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

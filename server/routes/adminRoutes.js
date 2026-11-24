@@ -1,0 +1,262 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../db');
+const { requireAdmin } = require('../auth');
+const { getSeedData } = require('../seedData');
+
+// Protect all admin routes
+router.use(requireAdmin);
+
+// Admin dashboard statistics
+router.get('/stats', (req, res) => {
+  const currentDb = db.getDb();
+  const students = currentDb.users.filter(u => u.role === 'student');
+  const attempts = currentDb.attempts;
+  const tests = currentDb.tests;
+
+  const totalScoreSum = attempts.reduce((sum, a) => sum + (a.score || 0), 0);
+  const avgScore = attempts.length > 0 ? Math.round((totalScoreSum / attempts.length) * 10) / 10 : 0;
+  const qualifiedCount = attempts.filter(a => a.isQualified).length;
+  const passRate = attempts.length > 0 ? Math.round((qualifiedCount / attempts.length) * 100) : 0;
+
+  const categoryCounts = {
+    LDCE: tests.filter(t => t.category === 'LDCE').length,
+    CAPF: tests.filter(t => t.category === 'CAPF').length,
+    SI: tests.filter(t => t.category === 'SI').length,
+    SSC: tests.filter(t => t.category === 'SSC').length,
+    Bank: tests.filter(t => t.category === 'Bank').length
+  };
+
+  res.json({
+    stats: {
+      totalStudents: students.length,
+      totalTests: tests.length,
+      totalAttempts: attempts.length,
+      averageScore: avgScore,
+      passRate,
+      categoryCounts
+    }
+  });
+});
+
+// Admin: Get all tests (including full questions)
+router.get('/tests', (req, res) => {
+  const tests = db.getDb().tests;
+  res.json({ tests });
+});
+
+// Admin: Create new mock test
+router.post('/tests', (req, res) => {
+  try {
+    const {
+      title,
+      category,
+      targetExam,
+      description,
+      durationMinutes,
+      totalMarks,
+      passingMarks,
+      marksPerQuestion,
+      negativeMarking,
+      sections,
+      difficulty,
+      questions
+    } = req.body;
+
+    if (!title || !category || !questions || !questions.length) {
+      return res.status(400).json({ error: 'Title, category, and at least one question are required' });
+    }
+
+    const newTest = {
+      id: 'test_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      title: title.trim(),
+      category: category.trim(),
+      targetExam: targetExam || category,
+      description: description || '',
+      durationMinutes: Number(durationMinutes) || 60,
+      totalMarks: Number(totalMarks) || (questions.length * (Number(marksPerQuestion) || 1)),
+      passingMarks: Number(passingMarks) || (Number(totalMarks) * 0.4),
+      marksPerQuestion: Number(marksPerQuestion) || 1,
+      negativeMarking: Number(negativeMarking) !== undefined ? Number(negativeMarking) : 0.25,
+      sections: sections && sections.length ? sections : ['General Knowledge', 'Reasoning'],
+      difficulty: difficulty || 'Moderate',
+      featured: true,
+      questions: questions.map((q, idx) => ({
+        id: q.id || `q_${Date.now()}_${idx + 1}`,
+        section: q.section || 'General',
+        textEn: q.textEn || '',
+        textHi: q.textHi || '',
+        options: q.options || [],
+        correctAnswer: Number(q.correctAnswer) || 0,
+        explanationEn: q.explanationEn || '',
+        explanationHi: q.explanationHi || ''
+      })),
+      createdAt: new Date().toISOString()
+    };
+
+    db.createTest(newTest);
+    res.status(201).json({ message: 'Mock test created successfully!', test: newTest });
+  } catch (err) {
+    console.error('Create test error:', err);
+    res.status(500).json({ error: 'Failed to create mock test' });
+  }
+});
+
+// Admin: Update test & questions
+router.put('/tests/:id', (req, res) => {
+  try {
+    const {
+      title,
+      category,
+      targetExam,
+      description,
+      durationMinutes,
+      totalMarks,
+      passingMarks,
+      marksPerQuestion,
+      negativeMarking,
+      sections,
+      difficulty,
+      questions
+    } = req.body;
+
+    const existing = db.getTestById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    const updates = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (category !== undefined) updates.category = category.trim();
+    if (targetExam !== undefined) updates.targetExam = targetExam.trim();
+    if (description !== undefined) updates.description = description;
+    if (difficulty !== undefined) updates.difficulty = difficulty;
+    if (marksPerQuestion !== undefined) updates.marksPerQuestion = Number(marksPerQuestion) || 1;
+    if (negativeMarking !== undefined) updates.negativeMarking = Number(negativeMarking);
+    if (sections !== undefined) updates.sections = sections;
+
+    if (questions && Array.isArray(questions)) {
+      updates.questions = questions.map((q, idx) => ({
+        id: q.id || `q_${Date.now()}_${idx + 1}`,
+        section: q.section || 'General',
+        textEn: q.textEn || '',
+        textHi: q.textHi || '',
+        options: q.options || [],
+        correctAnswer: Number(q.correctAnswer) || 0,
+        explanationEn: q.explanationEn || '',
+        explanationHi: q.explanationHi || ''
+      }));
+      // Auto-sync duration with questions count (1 min per question per user requirement)
+      const qLen = updates.questions.length;
+      updates.durationMinutes = Number(durationMinutes) || qLen;
+      const mpq = updates.marksPerQuestion || existing.marksPerQuestion || 1;
+      updates.totalMarks = Number(totalMarks) || (qLen * mpq);
+      updates.passingMarks = Number(passingMarks) || (updates.totalMarks * 0.4);
+    } else {
+      if (durationMinutes !== undefined) updates.durationMinutes = Number(durationMinutes);
+      if (totalMarks !== undefined) updates.totalMarks = Number(totalMarks);
+      if (passingMarks !== undefined) updates.passingMarks = Number(passingMarks);
+    }
+
+    const updated = db.updateTest(req.params.id, updates);
+    res.json({ message: 'Test and questions updated successfully', test: updated });
+  } catch (err) {
+    console.error('Update test error:', err);
+    res.status(500).json({ error: 'Failed to update test' });
+  }
+});
+
+// Admin: Add a new question to an existing test
+router.post('/tests/:id/questions', (req, res) => {
+  try {
+    const test = db.getTestById(req.params.id);
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    const { section, textEn, textHi, options, correctAnswer, explanationEn, explanationHi } = req.body;
+    if (!textEn || !options || options.length < 2) {
+      return res.status(400).json({ error: 'Question text and at least 2 options are required' });
+    }
+
+    const newQuestion = {
+      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      section: section || 'General',
+      textEn: textEn.trim(),
+      textHi: (textHi || '').trim(),
+      options: options.map(o => (o || '').trim()),
+      correctAnswer: Number(correctAnswer) || 0,
+      explanationEn: (explanationEn || '').trim(),
+      explanationHi: (explanationHi || '').trim()
+    };
+
+    const currentQuestions = test.questions || [];
+    currentQuestions.push(newQuestion);
+
+    // Auto-sync question count and duration (1 min per question)
+    const newQLen = currentQuestions.length;
+    const mpq = test.marksPerQuestion || 1;
+    const updates = {
+      questions: currentQuestions,
+      durationMinutes: newQLen,
+      totalMarks: newQLen * mpq,
+      passingMarks: Math.round(newQLen * mpq * 0.4)
+    };
+
+    const updated = db.updateTest(req.params.id, updates);
+    res.status(201).json({
+      message: 'New question added successfully!',
+      question: newQuestion,
+      totalQuestions: newQLen,
+      durationMinutes: updates.durationMinutes,
+      test: updated
+    });
+  } catch (err) {
+    console.error('Add question error:', err);
+    res.status(500).json({ error: 'Failed to add question to test' });
+  }
+});
+
+// Admin: Delete test
+router.delete('/tests/:id', (req, res) => {
+  const removed = db.deleteTest(req.params.id);
+  if (!removed) {
+    return res.status(404).json({ error: 'Test not found' });
+  }
+  res.json({ message: 'Test deleted successfully', removedId: req.params.id });
+});
+
+// Admin: Get all student submissions
+router.get('/attempts', (req, res) => {
+  const attempts = db.getAllAttempts();
+  res.json({ attempts });
+});
+
+// Admin: Get all users
+router.get('/users', (req, res) => {
+  const users = db.getDb().users.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    targetExam: u.targetExam,
+    force: u.force,
+    rollNo: u.rollNo,
+    createdAt: u.createdAt,
+    attemptsCount: db.getAttemptsByUser(u.id).length
+  }));
+  res.json({ users });
+});
+
+// Admin: Reset / re-seed database
+router.post('/seed-reset', (req, res) => {
+  const { defaultUsers, defaultTests } = getSeedData();
+  const currentDb = db.getDb();
+  currentDb.users = defaultUsers;
+  currentDb.tests = defaultTests;
+  currentDb.attempts = [];
+  db.saveDb();
+  res.json({ message: 'Database reset to authentic seed data successfully' });
+});
+
+module.exports = router;

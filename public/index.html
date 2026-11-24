@@ -219,34 +219,31 @@
       <!-- Categories Filter Bar -->
       <div class="categories-bar">
         <button class="cat-pill active" data-cat="all" onclick="App.loadTests('all')">
-          <span>🌟</span> All Tests (32)
+          <span>🌟</span> All Tests (63)
         </button>
-        <button class="cat-pill" data-cat="paid" onclick="App.loadTests('paid')">
-          <span>🔒</span> Paid Section (30 Mocks)
+        <button class="cat-pill" data-cat="free" onclick="App.loadTests('free')" style="border-color: rgba(56, 189, 248, 0.45); color: #38bdf8; font-weight: 700;">
+          <span>🆓</span> 3 Free Mocks (100 Qs)
+        </button>
+        <button class="cat-pill" data-cat="paid" onclick="App.loadTests('paid')" style="border-color: rgba(245, 158, 11, 0.45); color: #fbbf24; font-weight: 700;">
+          <span>🔒</span> Paid Section (60 Mocks)
         </button>
         <button class="cat-pill" data-cat="crpf" onclick="App.loadTests('crpf')">
-          <span>🔴</span> CRPF (6 Mocks)
+          <span>🔴</span> CRPF (10 Mocks)
         </button>
         <button class="cat-pill" data-cat="cisf" onclick="App.loadTests('cisf')">
-          <span>🟡</span> CISF (6 Mocks)
+          <span>🟡</span> CISF (10 Mocks)
         </button>
         <button class="cat-pill" data-cat="bsf" onclick="App.loadTests('bsf')">
-          <span>🟠</span> BSF (5 Mocks)
+          <span>🟠</span> BSF (10 Mocks)
         </button>
         <button class="cat-pill" data-cat="itbp" onclick="App.loadTests('itbp')">
-          <span>🔵</span> ITBP (5 Mocks)
+          <span>🔵</span> ITBP (10 Mocks)
         </button>
         <button class="cat-pill" data-cat="ssb" onclick="App.loadTests('ssb')">
-          <span>🟢</span> SSB (4 Mocks)
+          <span>🟢</span> SSB (10 Mocks)
         </button>
         <button class="cat-pill" data-cat="ar" onclick="App.loadTests('ar')">
-          <span>🟤</span> Assam Rifles & AC (4 Mocks)
-        </button>
-        <button class="cat-pill" data-cat="ldce" onclick="App.loadTests('ldce')">
-          <span>🎖️</span> LDCE General
-        </button>
-        <button class="cat-pill" data-cat="si" onclick="App.loadTests('si')">
-          <span>⭐</span> Sub-Inspector & SSC
+          <span>🟤</span> Assam Rifles (10 Mocks)
         </button>
       </div>
 
@@ -352,56 +349,61 @@
               ⚔️
             </div>
             <div>
-              <h3 style="color: #fff; font-size: 1.35rem; margin: 0; font-family: var(--font-military); letter-spacing: 0.5px;">30 FULL-LENGTH CAPF FORCE-WISE MOCKS INCLUDED</h3>
-              <p style="color: #94a3b8; font-size: 0.88rem; margin: 0.25rem 0 0 0;">All 30 tests unlocked instantly with Tactical Pass (₹100) or Commando Pro Pass (₹199)</p>
+              <h3 style="color: #fff; font-size: 1.35rem; margin: 0; font-family: var(--font-military); letter-spacing: 0.5px;">60 FULL-LENGTH FORCE-WISE MOCKS (100 Qs EACH) + 3 FREE MOCKS</h3>
+              <p style="color: #94a3b8; font-size: 0.88rem; margin: 0.25rem 0 0 0;">Exactly 100 Questions per Mock (25 Qs/Section) • 100 Minutes Duration • 10 Mocks per CAPF Force</p>
             </div>
           </div>
-          <button class="btn-3d" style="padding: 0.65rem 1.4rem; font-size: 0.88rem; white-space: nowrap;" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('paid');">
-            ⚡ Browse 30 Paid Mocks ➔
-          </button>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn-demo-pill" style="border-color: #38bdf8; color: #38bdf8;" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('free');">
+              🆓 Attempt 3 Free Mocks ➔
+            </button>
+            <button class="btn-3d" style="padding: 0.65rem 1.4rem; font-size: 0.88rem; white-space: nowrap;" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('paid');">
+              ⚡ Browse 60 Paid Mocks ➔
+            </button>
+          </div>
         </div>
 
         <div class="forces-badges-grid">
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('crpf');">
             <div class="force-badge-icon crpf-icon">🔴</div>
             <div class="force-badge-text">
-              <strong>CRPF (6 Mocks)</strong>
-              <span>CRPF Act 1949 • CoBRA • Riot Control</span>
+              <strong>CRPF (10 Full Mocks)</strong>
+              <span>100 Qs Each • CRPF Act 1949 • CoBRA • Riot Drills</span>
             </div>
           </div>
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('cisf');">
             <div class="force-badge-icon cisf-icon">🟡</div>
             <div class="force-badge-text">
-              <strong>CISF (6 Mocks)</strong>
-              <span>CISF Act 1968 • ASG Aviation • PIDS</span>
+              <strong>CISF (10 Full Mocks)</strong>
+              <span>100 Qs Each • CISF Act 1968 • ASG Aviation • PIDS</span>
             </div>
           </div>
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('bsf');">
             <div class="force-badge-icon bsf-icon">🟠</div>
             <div class="force-badge-text">
-              <strong>BSF (5 Mocks)</strong>
-              <span>BSF Act 1968 • BOP Defense • Creeks</span>
+              <strong>BSF (10 Full Mocks)</strong>
+              <span>100 Qs Each • BSF Act 1968 • BOP Defense • Creeks</span>
             </div>
           </div>
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('itbp');">
             <div class="force-badge-icon itbp-icon">🔵</div>
             <div class="force-badge-text">
-              <strong>ITBP (5 Mocks)</strong>
-              <span>ITBP Act 1992 • High Altitude • LAC</span>
+              <strong>ITBP (10 Full Mocks)</strong>
+              <span>100 Qs Each • ITBP Act 1992 • High Altitude • LAC</span>
             </div>
           </div>
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('ssb');">
             <div class="force-badge-icon ssb-icon">🟢</div>
             <div class="force-badge-text">
-              <strong>SSB (4 Mocks)</strong>
-              <span>SSB Act 2007 • Nepal/Bhutan • HUMINT</span>
+              <strong>SSB (10 Full Mocks)</strong>
+              <span>100 Qs Each • SSB Act 2007 • Nepal/Bhutan • HUMINT</span>
             </div>
           </div>
           <div class="force-badge-item" onclick="document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'}); App.loadTests('ar');">
             <div class="force-badge-icon ar-icon">🟤</div>
             <div class="force-badge-text">
-              <strong>Assam Rifles & AC (4 Mocks)</strong>
-              <span>AR Act 2006 • Jungle Warfare • UPSC CAPF</span>
+              <strong>Assam Rifles (10 Full Mocks)</strong>
+              <span>100 Qs Each • AR Act 2006 • Jungle Warfare • FMR</span>
             </div>
           </div>
         </div>

@@ -73,10 +73,12 @@ module.exports = {
       const catLower = category.toLowerCase();
       if (catLower === 'paid') {
         list = list.filter(t => t.isPaid === true);
+      } else if (catLower === 'free') {
+        list = list.filter(t => !t.isPaid);
       } else if (catLower === 'crpf' || catLower === 'cisf' || catLower === 'bsf' || catLower === 'itbp' || catLower === 'ssb') {
         list = list.filter(t => (t.force && t.force.toLowerCase() === catLower) || (t.category && t.category.toLowerCase() === catLower));
       } else if (catLower === 'ar' || catLower === 'assam_rifles' || catLower === 'assam rifles') {
-        list = list.filter(t => (t.force && (t.force.toLowerCase().includes('assam') || t.force.toLowerCase().includes('ar') || t.force.toLowerCase().includes('capf'))));
+        list = list.filter(t => (t.force && (t.force.toLowerCase().includes('assam') || t.force.toLowerCase().includes('ar'))));
       } else if (catLower !== 'all') {
         list = list.filter(t => (t.category && t.category.toLowerCase() === catLower) || (t.force && t.force.toLowerCase() === catLower));
       }

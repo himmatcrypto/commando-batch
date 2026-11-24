@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
+const firebase = require('./firebase');
 const { getSeedData } = require('./seedData');
 
 const authRoutes = require('./routes/authRoutes');
@@ -56,6 +57,7 @@ function initializeSeedData() {
 }
 
 initializeSeedData();
+db.initFirebaseSync().catch(err => console.warn('Firebase sync init:', err.message));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -64,12 +66,13 @@ app.use('/api/attempts', attemptRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 
-// System health check
+// System health check & Firebase status
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
     portal: 'Commando Batch Exam Engine',
     version: '2.0.0',
+    firebase: firebase.getStatus(),
     timestamp: new Date().toISOString()
   });
 });

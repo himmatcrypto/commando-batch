@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const firebase = require('./firebase');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
@@ -13,6 +14,7 @@ let db = {
   users: [],
   tests: [],
   attempts: [],
+  enquiries: [],
   settings: {
     siteName: 'Commando Batch - Defense & Competitive Exam Portal',
     announcement: 'CRPF & CISF LDCE 2026 and SSC CPO SI Mock Tests are LIVE! Realistic TCS iON CBT Mode Activated.'
@@ -40,12 +42,93 @@ function saveDatabase() {
   }
 }
 
+// Non-blocking write-through to Cloud Firestore when connected
+function syncDocToFirestore(collectionName, docId, data) {
+  const fsDb = firebase.getFirestore();
+  if (!fsDb || !docId) return;
+  fsDb.collection(collectionName).doc(String(docId)).set(JSON.parse(JSON.stringify(data)), { merge: true })
+    .catch(err => console.warn(`Firestore sync error (${collectionName}/${docId}):`, err.message));
+}
+
+function deleteDocFromFirestore(collectionName, docId) {
+  const fsDb = firebase.getFirestore();
+  if (!fsDb || !docId) return;
+  fsDb.collection(collectionName).doc(String(docId)).delete()
+    .catch(err => console.warn(`Firestore delete error (${collectionName}/${docId}):`, err.message));
+}
+
+async function syncAllToFirestore() {
+  const fsDb = firebase.getFirestore();
+  if (!fsDb) {
+    throw new Error('Firebase Firestore is not connected. Add firebase-service-account.json in project root.');
+  }
+
+  const collections = [
+    { name: 'users', items: db.users || [] },
+    { name: 'tests', items: db.tests || [] },
+    { name: 'attempts', items: db.attempts || [] },
+    { name: 'enquiries', items: db.enquiries || [] }
+  ];
+
+  let totalSynced = 0;
+  for (const col of collections) {
+    // Firestore batch limit is 500 writes per batch
+    for (let i = 0; i < col.items.length; i += 400) {
+      const batch = fsDb.batch();
+      const slice = col.items.slice(i, i + 400);
+      slice.forEach(item => {
+        if (item && item.id) {
+          const ref = fsDb.collection(col.name).doc(String(item.id));
+          batch.set(ref, JSON.parse(JSON.stringify(item)));
+          totalSynced++;
+        }
+      });
+      await batch.commit();
+    }
+  }
+  return { totalSynced };
+}
+
+async function initFirebaseSync() {
+  const status = firebase.initFirebase();
+  if (!status.connected) return status;
+
+  const fsDb = firebase.getFirestore();
+  try {
+    const testsSnap = await fsDb.collection('tests').limit(1).get();
+    if (testsSnap.empty) {
+      console.log('🔥 Firestore is empty — migrating local database to Cloud Firestore...');
+      const res = await syncAllToFirestore();
+      console.log(`🔥 Migrated ${res.totalSynced} records to Cloud Firestore!`);
+    } else {
+      const [usersSnap, allTestsSnap, attemptsSnap, enquiriesSnap] = await Promise.all([
+        fsDb.collection('users').get(),
+        fsDb.collection('tests').get(),
+        fsDb.collection('attempts').get(),
+        fsDb.collection('enquiries').get()
+      ]);
+
+      if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
+      if (!allTestsSnap.empty) db.tests = allTestsSnap.docs.map(d => d.data());
+      if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
+      if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
+      saveDatabase();
+      console.log(`🔥 Synced from Cloud Firestore: ${db.users.length} users, ${db.tests.length} tests, ${db.attempts.length} attempts.`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Initial Firestore sync warning:', err.message);
+  }
+  return status;
+}
+
 // Initial load
 loadDatabase();
 
 module.exports = {
   getDb: () => db,
   saveDb: saveDatabase,
+  initFirebaseSync,
+  syncAllToFirestore,
   // Helper queries
   findUserByEmail: (email) => {
     return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -56,6 +139,7 @@ module.exports = {
   createUser: (userData) => {
     db.users.push(userData);
     saveDatabase();
+    syncDocToFirestore('users', userData.id, userData);
     return userData;
   },
   updateUser: (id, updates) => {
@@ -63,6 +147,7 @@ module.exports = {
     if (idx !== -1) {
       db.users[idx] = { ...db.users[idx], ...updates };
       saveDatabase();
+      syncDocToFirestore('users', id, db.users[idx]);
       return db.users[idx];
     }
     return null;
@@ -95,6 +180,7 @@ module.exports = {
   createTest: (testData) => {
     db.tests.push(testData);
     saveDatabase();
+    syncDocToFirestore('tests', testData.id, testData);
     return testData;
   },
   updateTest: (id, updates) => {
@@ -102,6 +188,7 @@ module.exports = {
     if (idx !== -1) {
       db.tests[idx] = { ...db.tests[idx], ...updates, updatedAt: new Date().toISOString() };
       saveDatabase();
+      syncDocToFirestore('tests', id, db.tests[idx]);
       return db.tests[idx];
     }
     return null;
@@ -111,6 +198,7 @@ module.exports = {
     if (idx !== -1) {
       const removed = db.tests.splice(idx, 1);
       saveDatabase();
+      deleteDocFromFirestore('tests', id);
       return removed[0];
     }
     return null;
@@ -118,6 +206,7 @@ module.exports = {
   createAttempt: (attemptData) => {
     db.attempts.push(attemptData);
     saveDatabase();
+    syncDocToFirestore('attempts', attemptData.id, attemptData);
     return attemptData;
   },
   getAttemptsByUser: (userId) => {
@@ -139,6 +228,7 @@ module.exports = {
     db.enquiries = db.enquiries || [];
     db.enquiries.push(enquiryData);
     saveDatabase();
+    syncDocToFirestore('enquiries', enquiryData.id, enquiryData);
     return enquiryData;
   },
   updateEnquiry: (id, updates) => {
@@ -147,6 +237,7 @@ module.exports = {
     if (idx !== -1) {
       db.enquiries[idx] = { ...db.enquiries[idx], ...updates, updatedAt: new Date().toISOString() };
       saveDatabase();
+      syncDocToFirestore('enquiries', id, db.enquiries[idx]);
       return db.enquiries[idx];
     }
     return null;

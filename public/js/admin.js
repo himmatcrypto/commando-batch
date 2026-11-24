@@ -10,6 +10,7 @@ const Admin = (function () {
   let users = [];
   let enquiries = [];
   let tempQuestions = [];
+  let firebaseStatus = { connected: false, projectId: null };
 
   async function loadAdminDashboard() {
     const user = API.getUser();
@@ -21,12 +22,13 @@ const Admin = (function () {
 
     try {
       App.showToast('Loading Admin Command Center...', 'info');
-      const [statsRes, testsRes, attemptsRes, usersRes, enquiriesRes] = await Promise.all([
+      const [statsRes, testsRes, attemptsRes, usersRes, enquiriesRes, fbStatusRes] = await Promise.all([
         API.getAdminStats(),
         API.getAdminTests(),
         API.getAdminAttempts(),
         API.getAdminUsers(),
-        API.getAdminEnquiries()
+        API.getAdminEnquiries(),
+        API.getFirebaseStatus().catch(() => ({ connected: false, projectId: null }))
       ]);
 
       stats = statsRes.stats;
@@ -34,6 +36,7 @@ const Admin = (function () {
       attempts = attemptsRes.attempts;
       users = usersRes.users;
       enquiries = enquiriesRes.enquiries || [];
+      firebaseStatus = fbStatusRes || { connected: false, projectId: null };
 
       renderAdminPanel();
     } catch (err) {
@@ -57,7 +60,9 @@ const Admin = (function () {
             <div class="profile-tags">
               <span class="profile-tag">Command Center</span>
               <span class="profile-tag">Defense & Competitive Exams</span>
-              <span class="profile-tag">Role: Chief Controller</span>
+              <span class="profile-tag" style="border-color: ${firebaseStatus.connected ? '#22c55e' : '#f59e0b'}; color: ${firebaseStatus.connected ? '#4ade80' : '#fbbf24'};">
+                🔥 Firebase: ${firebaseStatus.connected ? 'Connected (' + escapeHtml(firebaseStatus.projectId) + ')' : 'Ready for Credentials'}
+              </span>
             </div>
           </div>
         </div>
@@ -65,6 +70,9 @@ const Admin = (function () {
         <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
           <button class="btn-3d btn-3d-success" onclick="Admin.openCreateTestModal()">
             + Create New Mock Test
+          </button>
+          <button class="btn-demo-pill" style="border-color: #f59e0b; color: #fbbf24; font-weight: 700;" onclick="Admin.syncFirebase()">
+            🔥 Sync to Firestore
           </button>
           <button class="btn-3d btn-3d-secondary" onclick="Admin.resetSeedDataConfirm()">
             🔄 Reset Seed Data
@@ -1355,6 +1363,16 @@ const Admin = (function () {
     editingQIndex = -1;
   }
 
+  async function syncFirebase() {
+    try {
+      App.showToast('Syncing all users, tests, attempts & enquiries to Cloud Firestore...', 'info');
+      const res = await API.syncToFirebase();
+      App.showToast(`🔥 ${res.message}`, 'success');
+    } catch (err) {
+      App.showToast(err.message || 'Add firebase-service-account.json in project root to enable Firestore sync.', 'warning');
+    }
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return str
@@ -1386,6 +1404,7 @@ const Admin = (function () {
     closeEditModal,
     openGrantPassModal,
     confirmGrantPass,
-    revokePass
+    revokePass,
+    syncFirebase
   };
 })();

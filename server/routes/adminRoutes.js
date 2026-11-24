@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const firebase = require('../firebase');
 const { requireAdmin } = require('../auth');
 const { getSeedData } = require('../seedData');
 
@@ -329,6 +330,25 @@ router.post('/seed-reset', (req, res) => {
   currentDb.attempts = [];
   db.saveDb();
   res.json({ message: 'Database reset to authentic seed data successfully' });
+});
+
+// Admin: Get Firebase connection status
+router.get('/firebase/status', (req, res) => {
+  res.json(firebase.getStatus());
+});
+
+// Admin: Manually sync all local database records to Cloud Firestore
+router.post('/firebase/sync', async (req, res) => {
+  try {
+    const result = await db.syncAllToFirestore();
+    res.json({
+      message: `Successfully synced ${result.totalSynced} records to Cloud Firestore!`,
+      totalSynced: result.totalSynced,
+      firebase: firebase.getStatus()
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

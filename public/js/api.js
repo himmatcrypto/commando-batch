@@ -197,6 +197,16 @@ const API = (function () {
       });
     },
 
+    async getFirebaseStatus() {
+      return await request('/api/admin/firebase/status');
+    },
+
+    async syncToFirebase() {
+      return await request('/api/admin/firebase/sync', {
+        method: 'POST'
+      });
+    },
+
     async resetSeedData() {
       return await request('/api/admin/seed-reset', {
         method: 'POST'

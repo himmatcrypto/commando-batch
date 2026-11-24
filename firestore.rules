@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public read for mock tests metadata; writes restricted to backend Admin SDK
+    match /tests/{testId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Users, attempts, and enquiries are managed securely via backend Express + Firebase Admin SDK
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+    match /attempts/{attemptId} {
+      allow read, write: if false;
+    }
+    match /enquiries/{enquiryId} {
+      allow read, write: if false;
+    }
+  }
+}

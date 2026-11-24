@@ -252,7 +252,7 @@ router.get('/users', (req, res) => {
 // Admin: Grant Free Premium Pass to a registered candidate for N days
 router.post('/users/:id/grant-pass', (req, res) => {
   try {
-    const user = db.getUserById(req.params.id);
+    const user = db.findUserById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
@@ -304,7 +304,7 @@ router.post('/users/:id/grant-pass', (req, res) => {
 // Admin: Revoke active pass from a candidate
 router.post('/users/:id/revoke-pass', (req, res) => {
   try {
-    const user = db.getUserById(req.params.id);
+    const user = db.findUserById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Candidate not found' });
     }

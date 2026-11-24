@@ -271,6 +271,19 @@
       "phone": "9876501234",
       "rollNo": "CAPF-2026-1635",
       "createdAt": "2026-11-24T17:47:32.890Z"
+    },
+    {
+      "id": "usr_1795542526047_307qj",
+      "name": "Constable Arjun Verma",
+      "email": "arjun_1795542526049@capf.in",
+      "password": "$2b$10$5.vIvL1f6LmV6/GgaF0fOOHNOkRs7oDFTvV5fRHRmpkxZz/i4PVci",
+      "role": "student",
+      "targetExam": "CAPF (AC)",
+      "force": "CRPF",
+      "phone": "9876501234",
+      "rollNo": "CAPF-2026-5941",
+      "createdAt": "2026-11-24T17:48:46.160Z",
+      "activePackage": null
     }
   ],
   "tests": [

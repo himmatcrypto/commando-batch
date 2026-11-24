@@ -347,35 +347,191 @@ const Admin = (function () {
 
   function renderUsersTab() {
     return `
+      <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; background: rgba(15, 23, 42, 0.85); padding: 0.85rem 1.25rem; border-radius: 10px; border: 1px solid rgba(212,175,55,0.25);">
+        <div>
+          <h3 style="color: #fbbf24; font-size: 1.05rem; margin: 0; font-family: var(--font-military);">🎖️ CANDIDATE ROSTER & ADMIN FREE PREMIUM PASS CONTROL</h3>
+          <p style="color: #94a3b8; font-size: 0.82rem; margin: 0.2rem 0 0 0;">Grant any registered candidate free premium pass benefits for a custom number of days and target CAPF force.</p>
+        </div>
+      </div>
+
       <div class="data-table-container">
         <table class="data-table">
           <thead>
             <tr>
               <th>Candidate Name</th>
-              <th>Email</th>
-              <th>Roll Number</th>
-              <th>Target Exam</th>
-              <th>Force / Unit</th>
+              <th>Email / Roll No</th>
+              <th>Target / Force</th>
               <th>Role</th>
-              <th>Tests Taken</th>
+              <th>Premium Pass Status</th>
+              <th>Tests</th>
+              <th>Admin Pass Action</th>
             </tr>
           </thead>
           <tbody>
-            ${users.map(u => `
-              <tr>
-                <td><strong>${escapeHtml(u.name)}</strong></td>
-                <td style="color: #94a3b8;">${escapeHtml(u.email)}</td>
-                <td style="font-family: monospace; color: var(--gold-bright);">${escapeHtml(u.rollNo || 'N/A')}</td>
-                <td><span class="cat-badge badge-ldce">${escapeHtml(u.targetExam || 'LDCE')}</span></td>
-                <td>${escapeHtml(u.force || 'Defense')}</td>
-                <td><span class="status-tag ${u.role === 'admin' ? 'fail' : 'pass'}">${u.role.toUpperCase()}</span></td>
-                <td style="font-weight: 700;">${u.attemptsCount || 0}</td>
-              </tr>
-            `).join('')}
+            ${users.map(u => {
+              const pkg = u.activePackage;
+              const isValid = pkg && pkg.status === 'ACTIVE' && (!pkg.expiresAt || new Date(pkg.expiresAt) > new Date());
+              const expiryStr = pkg && pkg.expiresAt ? new Date(pkg.expiresAt).toLocaleDateString('en-IN') : '';
+              const passBadge = isValid
+                ? `
+                  <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                    <span style="display: inline-block; padding: 0.2rem 0.5rem; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 4px; color: #4ade80; font-size: 0.72rem; font-weight: 700;">
+                      🟢 ACTIVE (${escapeHtml(pkg.targetForce || 'ALL')})
+                    </span>
+                    <span style="font-size: 0.72rem; color: #94a3b8;">
+                      ${pkg.grantedByAdmin ? '🎁 Admin Free Grant' : '💳 Paid Pass'} • Exp: ${expiryStr}
+                    </span>
+                  </div>
+                `
+                : `<span style="color: #64748b; font-size: 0.8rem;">⚪ Free / No Active Pass</span>`;
+
+              const actionHtml = u.role === 'admin'
+                ? `<span style="color: #94a3b8; font-size: 0.78rem;">HQ Admin</span>`
+                : `
+                  <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                    <button class="btn-demo-pill" style="border-color: #fbbf24; color: #fbbf24; font-weight: 700;" onclick="Admin.openGrantPassModal('${u.id}')">
+                      🎁 ${isValid ? 'Update / Extend Pass' : 'Grant Free Pass'}
+                    </button>
+                    ${isValid ? `
+                      <button class="btn-demo-pill" style="border-color: #ef4444; color: #f87171;" onclick="Admin.revokePass('${u.id}')">
+                        Revoke
+                      </button>
+                    ` : ''}
+                  </div>
+                `;
+
+              return `
+                <tr>
+                  <td><strong>${escapeHtml(u.name)}</strong></td>
+                  <td>
+                    <div style="color: #cbd5e1; font-size: 0.85rem;">${escapeHtml(u.email)}</div>
+                    <div style="font-family: monospace; color: var(--gold-bright); font-size: 0.78rem;">${escapeHtml(u.rollNo || 'N/A')}</div>
+                  </td>
+                  <td>
+                    <span class="cat-badge badge-ldce">${escapeHtml(u.targetExam || 'LDCE')}</span>
+                    <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${escapeHtml(u.force || 'Defense')}</div>
+                  </td>
+                  <td><span class="status-tag ${u.role === 'admin' ? 'fail' : 'pass'}">${u.role.toUpperCase()}</span></td>
+                  <td>${passBadge}</td>
+                  <td style="font-weight: 700;">${u.attemptsCount || 0}</td>
+                  <td>${actionHtml}</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
       </div>
     `;
+  }
+
+  function openGrantPassModal(userId) {
+    const u = users.find(usr => usr.id === userId);
+    if (!u) return;
+
+    const currentForce = (u.activePackage && u.activePackage.targetForce) || u.force || 'ALL';
+    const forces = ['ALL', 'CRPF', 'CISF', 'BSF', 'ITBP', 'SSB', 'Assam Rifles'];
+    const optionsHtml = forces.map(f => {
+      const sel = f.toLowerCase() === currentForce.toLowerCase() ? 'selected' : '';
+      const label = f === 'ALL'
+        ? '🌟 ALL CAPF FORCES (Full Access - All 60 Mocks)'
+        : `🛡️ ${f} (10 Full-Length Mocks)`;
+      return `<option value="${escapeHtml(f)}" ${sel}>${label}</option>`;
+    }).join('');
+
+    const html = `
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <span style="font-size: 2.5rem;">🎁</span>
+        <h2 style="color: #fff; font-size: 1.5rem; margin-top: 0.25rem;">GRANT FREE PREMIUM PASS</h2>
+        <p style="color: #94a3b8; font-size: 0.88rem;">Assign complimentary premium mock test access directly from HQ Admin</p>
+      </div>
+
+      <div class="enrollment-summary-box" style="margin-bottom: 1.25rem;">
+        <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">Candidate Name</span>
+          <span style="font-weight: 700; color: #fff;">${escapeHtml(u.name)}</span>
+        </div>
+        <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">Email</span>
+          <span style="color: #cbd5e1;">${escapeHtml(u.email)}</span>
+        </div>
+        <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">Roll Number</span>
+          <span style="font-family: monospace; color: #fbbf24;">${escapeHtml(u.rollNo || 'N/A')}</span>
+        </div>
+        <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">Grant Fee</span>
+          <span style="color: #4ade80; font-weight: 800;">₹0 (FREE ADMIN GRANT)</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="color: #60a5fa;">🎯 Target CAPF Force Benefits to Unlock</label>
+        <select id="adminGrantForce" class="form-select" style="font-weight: 700; color: #fbbf24;">
+          ${optionsHtml}
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label" style="color: #60a5fa;">⏳ Number of Days Validity (1 - 3650 Days)</label>
+        <input type="number" id="adminGrantDays" class="form-input" min="1" max="3650" value="30" style="font-weight: 700; font-size: 1.05rem;">
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem;">
+          ${[7, 15, 30, 60, 90, 180, 365].map(d => `
+            <button type="button" class="btn-demo-pill" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;" onclick="document.getElementById('adminGrantDays').value=${d}">
+              ${d} Days
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+        <button class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
+        <button class="btn-3d btn-3d-success" style="flex: 2; font-size: 1rem;" onclick="Admin.confirmGrantPass('${u.id}')">
+          🎁 Activate Free Premium Pass
+        </button>
+      </div>
+    `;
+
+    App.openGeneralModal(html);
+  }
+
+  async function confirmGrantPass(userId) {
+    try {
+      const targetForce = document.getElementById('adminGrantForce').value;
+      const days = parseInt(document.getElementById('adminGrantDays').value, 10);
+
+      if (!days || days < 1) {
+        App.showToast('Please enter a valid number of days (at least 1).', 'error');
+        return;
+      }
+
+      App.showToast(`Granting ${days}-day free premium pass (${targetForce})...`, 'info');
+      const res = await API.grantAdminCandidatePass(userId, targetForce, days);
+
+      App.closeGeneralModal();
+      App.showToast(`✅ ${res.message}`, 'success');
+
+      // Refresh users list & re-render Candidate Roster tab
+      const usersRes = await API.getAdminUsers();
+      users = usersRes.users;
+      document.getElementById('tabAdminUsers').textContent = `Candidate Roster (${users.length})`;
+      document.getElementById('adminTabContent').innerHTML = renderUsersTab();
+    } catch (err) {
+      App.showToast(err.message || 'Failed to grant free premium pass', 'error');
+    }
+  }
+
+  async function revokePass(userId) {
+    if (!confirm('Are you sure you want to revoke this candidate\'s active premium pass?')) return;
+    try {
+      const res = await API.revokeAdminCandidatePass(userId);
+      App.showToast(res.message, 'info');
+
+      const usersRes = await API.getAdminUsers();
+      users = usersRes.users;
+      document.getElementById('adminTabContent').innerHTML = renderUsersTab();
+    } catch (err) {
+      App.showToast(err.message || 'Failed to revoke pass', 'error');
+    }
   }
 
   function openCreateTestModal() {
@@ -1227,6 +1383,9 @@ const Admin = (function () {
     recalcEditMarks,
     jumpToAddQuestion,
     saveEditTest,
-    closeEditModal
+    closeEditModal,
+    openGrantPassModal,
+    confirmGrantPass,
+    revokePass
   };
 })();

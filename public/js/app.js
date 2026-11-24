@@ -224,7 +224,7 @@ const App = (function () {
     }
 
     const user = API.getUser();
-    const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE';
+    const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE' && (!user.activePackage.expiresAt || new Date(user.activePackage.expiresAt) > new Date());
     const passForce = hasActivePass ? (user.activePackage.targetForce || '') : '';
 
     grid.innerHTML = tests.map(test => {

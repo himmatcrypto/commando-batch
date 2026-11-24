@@ -259,6 +259,18 @@
         "status": "ACTIVE",
         "transactionId": "TXN-CB-512681"
       }
+    },
+    {
+      "id": "usr_1795542452776_f38yi",
+      "name": "Constable Arjun Verma",
+      "email": "arjun_1795542452775@capf.in",
+      "password": "$2b$10$OEYBMgCz6AF6C/JAticrjeRFNRNbtqZRTaeG9jHZKeMtpY5AFUx5q",
+      "role": "student",
+      "targetExam": "CAPF (AC)",
+      "force": "CRPF",
+      "phone": "9876501234",
+      "rollNo": "CAPF-2026-1635",
+      "createdAt": "2026-11-24T17:47:32.890Z"
     }
   ],
   "tests": [

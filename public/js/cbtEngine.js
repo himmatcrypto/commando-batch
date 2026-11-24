@@ -41,7 +41,7 @@ const CBTEngine = (function () {
       }
 
       // Check if test is in paid section and candidate does not have active pass (admin bypasses)
-      const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE';
+      const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE' && (!user.activePackage.expiresAt || new Date(user.activePackage.expiresAt) > new Date());
       if (activeTest.isPaid && user.role !== 'admin') {
         if (!hasActivePass) {
           App.showToast(`This ${activeTest.force || 'CAPF'} mock test requires an active Tactical Pass (₹100) or Commando Pro Pass (₹199).`, 'warning');

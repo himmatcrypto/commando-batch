@@ -232,7 +232,7 @@ router.get('/attempts', (req, res) => {
   res.json({ attempts });
 });
 
-// Admin: Get all users
+// Admin: Get all users (with activePackage details)
 router.get('/users', (req, res) => {
   const users = db.getDb().users.map(u => ({
     id: u.id,
@@ -242,10 +242,82 @@ router.get('/users', (req, res) => {
     targetExam: u.targetExam,
     force: u.force,
     rollNo: u.rollNo,
+    activePackage: u.activePackage || null,
     createdAt: u.createdAt,
     attemptsCount: db.getAttemptsByUser(u.id).length
   }));
   res.json({ users });
+});
+
+// Admin: Grant Free Premium Pass to a registered candidate for N days
+router.post('/users/:id/grant-pass', (req, res) => {
+  try {
+    const user = db.getUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    const { targetForce, days } = req.body;
+    const validDays = parseInt(days, 10);
+    if (!validDays || validDays < 1 || validDays > 3650) {
+      return res.status(400).json({ error: 'Please provide a valid number of days (between 1 and 3650)' });
+    }
+
+    const forceName = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'ALL';
+    const isAll = forceName.toUpperCase() === 'ALL';
+
+    const pkgDetails = {
+      id: 'pkg_admin_grant',
+      name: `HQ Admin Free Premium Pass (${isAll ? 'All CAPF Forces' : forceName} - ${validDays} Days)`,
+      targetForce: isAll ? 'ALL' : forceName,
+      price: 0,
+      testsCount: isAll ? 60 : 10,
+      testsRemaining: isAll ? 60 : 10,
+      durationDays: validDays,
+      durationMonths: Math.max(1, Math.round(validDays / 30)),
+      grantedByAdmin: true,
+      subscribedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'ACTIVE',
+      transactionId: 'ADM-FREE-' + Math.floor(100000 + Math.random() * 900000)
+    };
+
+    const updatedUser = db.updateUser(user.id, { activePackage: pkgDetails });
+
+    res.json({
+      message: `Free Premium Pass (${isAll ? 'ALL Forces' : forceName}) granted to ${updatedUser.name} for ${validDays} days.`,
+      package: pkgDetails,
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        rollNo: updatedUser.rollNo,
+        activePackage: updatedUser.activePackage
+      }
+    });
+  } catch (err) {
+    console.error('Admin grant pass error:', err);
+    res.status(500).json({ error: 'Failed to grant free premium pass' });
+  }
+});
+
+// Admin: Revoke active pass from a candidate
+router.post('/users/:id/revoke-pass', (req, res) => {
+  try {
+    const user = db.getUserById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    db.updateUser(user.id, { activePackage: null });
+    res.json({
+      message: `Premium pass revoked for ${user.name}.`,
+      userId: user.id
+    });
+  } catch (err) {
+    console.error('Admin revoke pass error:', err);
+    res.status(500).json({ error: 'Failed to revoke candidate pass' });
+  }
 });
 
 // Admin: Reset / re-seed database

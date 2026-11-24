@@ -184,6 +184,19 @@ const API = (function () {
       return await request('/api/admin/users');
     },
 
+    async grantAdminCandidatePass(userId, targetForce, days) {
+      return await request(`/api/admin/users/${userId}/grant-pass`, {
+        method: 'POST',
+        body: JSON.stringify({ targetForce, days })
+      });
+    },
+
+    async revokeAdminCandidatePass(userId) {
+      return await request(`/api/admin/users/${userId}/revoke-pass`, {
+        method: 'POST'
+      });
+    },
+
     async resetSeedData() {
       return await request('/api/admin/seed-reset', {
         method: 'POST'

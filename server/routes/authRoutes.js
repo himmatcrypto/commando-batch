@@ -134,35 +134,31 @@ router.get('/me', requireAuth, (req, res) => {
   });
 });
 
-// Subscribe to Mock Test Package (₹100 for 2 months / ₹199 for 6 months)
+// Subscribe to Mock Test Package (Single Force: ₹100/2m or ₹199/6m | All Forces: ₹300/2m or ₹550/6m)
 router.post('/subscribe-package', requireAuth, (req, res) => {
   try {
-    const { packageId, targetForce } = req.body;
+    const { packageId, targetForce, durationMonths } = req.body;
     let pkgDetails = null;
     const forceName = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'CRPF';
+    const isAllForces = forceName.toUpperCase() === 'ALL';
 
-    if (packageId === 'pkg_100_2m') {
+    const is6Months = packageId === 'pkg_199_6m' || packageId === 'pkg_all_6m' || durationMonths === 6;
+
+    if (is6Months) {
+      // 6 Months Plan: Single Force = ₹199, All Forces Mocks = ₹550
+      const price = isAllForces ? 550 : 199;
+      const testsCount = isAllForces ? 60 : 10;
+      const name = isAllForces
+        ? 'Commando All-Force Pro Pass (All 60 Full-Length Mocks - 6 Months)'
+        : `Commando Pro Pass (${forceName} Special - 10 Full-Length Tests - 6 Months)`;
+
       pkgDetails = {
-        id: 'pkg_100_2m',
-        name: `Tactical Pass (${forceName} Special - 10 Full-Length Tests)`,
-        targetForce: forceName,
-        price: 100,
-        testsCount: 10,
-        testsRemaining: 10,
-        durationMonths: 2,
-        subscribedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'ACTIVE',
-        transactionId: 'TXN-CB-' + Math.floor(100000 + Math.random() * 900000)
-      };
-    } else if (packageId === 'pkg_199_6m') {
-      pkgDetails = {
-        id: 'pkg_199_6m',
-        name: `Commando Pro Pass (${forceName === 'ALL' ? 'All CAPF Forces' : forceName} - 6 Months)`,
-        targetForce: forceName,
-        price: 199,
-        testsCount: forceName === 'ALL' ? 60 : 10,
-        testsRemaining: forceName === 'ALL' ? 60 : 10,
+        id: isAllForces ? 'pkg_all_6m' : 'pkg_199_6m',
+        name,
+        targetForce: isAllForces ? 'ALL' : forceName,
+        price,
+        testsCount,
+        testsRemaining: testsCount,
         durationMonths: 6,
         subscribedAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
@@ -170,7 +166,26 @@ router.post('/subscribe-package', requireAuth, (req, res) => {
         transactionId: 'TXN-CB-' + Math.floor(100000 + Math.random() * 900000)
       };
     } else {
-      return res.status(400).json({ error: 'Invalid package selection' });
+      // 2 Months Plan: Single Force = ₹100, All Forces Mocks = ₹300
+      const price = isAllForces ? 300 : 100;
+      const testsCount = isAllForces ? 60 : 10;
+      const name = isAllForces
+        ? 'Tactical All-Force Pass (All 60 Full-Length Mocks - 2 Months)'
+        : `Tactical Pass (${forceName} Special - 10 Full-Length Tests - 2 Months)`;
+
+      pkgDetails = {
+        id: isAllForces ? 'pkg_all_2m' : 'pkg_100_2m',
+        name,
+        targetForce: isAllForces ? 'ALL' : forceName,
+        price,
+        testsCount,
+        testsRemaining: testsCount,
+        durationMonths: 2,
+        subscribedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+        status: 'ACTIVE',
+        transactionId: 'TXN-CB-' + Math.floor(100000 + Math.random() * 900000)
+      };
     }
 
     const updatedUser = db.updateUser(req.user.id, { activePackage: pkgDetails });

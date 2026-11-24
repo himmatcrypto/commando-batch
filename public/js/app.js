@@ -816,6 +816,54 @@ const App = (function () {
   // =========================================================================
   // MOCK TEST PACKAGES COMMERCE ENROLLMENT
   // =========================================================================
+  function getEnrollmentPricing(durationMonths, targetForce) {
+    const isAll = (targetForce || '').toUpperCase() === 'ALL';
+    const is6m = Number(durationMonths) === 6;
+
+    if (is6m) {
+      return {
+        price: isAll ? 550 : 199,
+        testsCount: isAll ? 60 : 10,
+        name: isAll ? 'Commando All-Force Pro Pass (All 60 Full-Length Mocks)' : `Commando Pro Pass (${targetForce} Special - 10 Tests)`,
+        duration: '6 Months Validity',
+        packageId: isAll ? 'pkg_all_6m' : 'pkg_199_6m'
+      };
+    } else {
+      return {
+        price: isAll ? 300 : 100,
+        testsCount: isAll ? 60 : 10,
+        name: isAll ? 'Tactical All-Force Pass (All 60 Full-Length Mocks)' : `Tactical Pass (${targetForce} Special - 10 Tests)`,
+        duration: '2 Months Validity',
+        packageId: isAll ? 'pkg_all_2m' : 'pkg_100_2m'
+      };
+    }
+  }
+
+  function onEnrollmentConfigChange() {
+    const durationEl = document.querySelector('input[name="enrollmentDuration"]:checked');
+    const forceSelect = document.getElementById('enrollmentForceSelect');
+    if (!durationEl || !forceSelect) return;
+
+    const durationMonths = parseInt(durationEl.value, 10);
+    const targetForce = forceSelect.value;
+    const info = getEnrollmentPricing(durationMonths, targetForce);
+
+    const priceDisplay = document.getElementById('enrollmentPriceDisplay');
+    const quotaDisplay = document.getElementById('enrollmentQuotaDisplay');
+    const planNameDisplay = document.getElementById('enrollmentPlanNameDisplay');
+    const validityDisplay = document.getElementById('enrollmentValidityDisplay');
+    const payBtn = document.getElementById('enrollmentPayBtn');
+
+    if (priceDisplay) priceDisplay.textContent = `₹${info.price} Only`;
+    if (quotaDisplay) quotaDisplay.textContent = `${info.testsCount} Full-Length CBT Tests ${targetForce === 'ALL' ? '(All Forces)' : '(' + targetForce + ')'}`;
+    if (planNameDisplay) planNameDisplay.textContent = info.name;
+    if (validityDisplay) validityDisplay.textContent = info.duration;
+    if (payBtn) {
+      payBtn.innerHTML = `⚡ Pay ₹${info.price} & Activate Pass`;
+      payBtn.setAttribute('data-pkg-id', info.packageId);
+    }
+  }
+
   function openPackageEnrollment(packageId = 'pkg_100_2m', preselectedForce = '') {
     const user = API.getUser();
     if (!user) {
@@ -824,41 +872,17 @@ const App = (function () {
       return;
     }
 
-    const pkgData = {
-      pkg_100_2m: {
-        id: 'pkg_100_2m',
-        name: 'Tactical Pass (10 Full-Length Tests)',
-        price: 100,
-        testsCount: 10,
-        duration: '2 Months Validity',
-        badge: 'TACTICAL 2-MONTH PASS'
-      },
-      pkg_199_6m: {
-        id: 'pkg_199_6m',
-        name: 'Commando Pro Pass (20 Full-Length Tests)',
-        price: 199,
-        testsCount: 20,
-        duration: '6 Months Validity',
-        badge: 'COMMANDO 6-MONTH PRO PASS'
-      }
-    }[packageId] || {
-      id: packageId,
-      name: 'Test Pass',
-      price: 100,
-      testsCount: 10,
-      duration: '2 Months',
-      badge: 'PASS'
-    };
-
-    // Determine initial force to select
+    const initialDuration = (packageId === 'pkg_199_6m' || packageId === 'pkg_all_6m') ? 6 : 2;
     const defaultForce = preselectedForce || (user.activePackage && user.activePackage.targetForce) || user.force || 'CRPF';
     const forces = ['CRPF', 'CISF', 'BSF', 'ITBP', 'SSB', 'Assam Rifles', 'ALL'];
+
+    const initialPricing = getEnrollmentPricing(initialDuration, defaultForce);
 
     const forceOptionsHtml = forces.map(f => {
       const isSelected = f.toLowerCase() === defaultForce.toLowerCase() ? 'selected' : '';
       const label = f === 'ALL'
-        ? 'ALL CAPF FORCES (Full Access - All 60 Mocks)'
-        : `${f} (10 Full-Length Mocks • 100 Qs each)`;
+        ? '🌟 ALL CAPF FORCES (All 60 Mocks: 2 Mo = ₹300 | 6 Mo = ₹550)'
+        : `🛡️ ${f} (10 Full-Length Mocks: 2 Mo = ₹100 | 6 Mo = ₹199)`;
       return `<option value="${escapeHtml(f)}" ${isSelected}>${label}</option>`;
     }).join('');
 
@@ -869,6 +893,43 @@ const App = (function () {
         <p style="color: #94a3b8; font-size: 0.88rem;">Instant activation on your official Candidate Roll Number</p>
       </div>
 
+      <!-- Duration Selection Switcher -->
+      <div style="margin-bottom: 1.25rem; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 0.85rem;">
+        <label style="color: #cbd5e1; font-size: 0.85rem; font-family: var(--font-military); letter-spacing: 1px; display: block; margin-bottom: 0.6rem; font-weight: 700;">
+          ⏳ 1. CHOOSE PASS VALIDITY DURATION:
+        </label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <label style="display: flex; align-items: center; gap: 0.6rem; background: rgba(30, 41, 59, 0.8); border: 1.5px solid #3b82f6; border-radius: 8px; padding: 0.65rem 0.85rem; cursor: pointer;">
+            <input type="radio" name="enrollmentDuration" value="2" ${initialDuration === 2 ? 'checked' : ''} onchange="App.onEnrollmentConfigChange()" style="accent-color: #3b82f6; transform: scale(1.2);">
+            <div>
+              <div style="color: #fff; font-weight: 700; font-size: 0.95rem;">2 MONTHS PASS</div>
+              <div style="color: #94a3b8; font-size: 0.75rem;">₹100 Single / ₹300 All Mocks</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.6rem; background: rgba(30, 41, 59, 0.8); border: 1.5px solid #f59e0b; border-radius: 8px; padding: 0.65rem 0.85rem; cursor: pointer;">
+            <input type="radio" name="enrollmentDuration" value="6" ${initialDuration === 6 ? 'checked' : ''} onchange="App.onEnrollmentConfigChange()" style="accent-color: #f59e0b; transform: scale(1.2);">
+            <div>
+              <div style="color: #fbbf24; font-weight: 700; font-size: 0.95rem;">6 MONTHS PRO PASS</div>
+              <div style="color: #94a3b8; font-size: 0.75rem;">₹199 Single / ₹550 All Mocks</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Target Force Selection Option in Payment -->
+      <div style="margin-bottom: 1.25rem; background: rgba(30, 41, 59, 0.7); border: 1.5px solid #3b82f6; border-radius: 10px; padding: 1rem;">
+        <label for="enrollmentForceSelect" style="color: #60a5fa; font-size: 0.88rem; font-family: var(--font-military); letter-spacing: 1px; display: block; margin-bottom: 0.5rem; font-weight: 700;">
+          🎯 2. SELECT TARGET CAPF FORCE TO UNLOCK:
+        </label>
+        <select id="enrollmentForceSelect" onchange="App.onEnrollmentConfigChange()" style="width: 100%; padding: 0.75rem 0.85rem; background: #0b1324; border: 1px solid #3b82f6; border-radius: 8px; color: #fbbf24; font-size: 0.95rem; font-weight: 700; outline: none; cursor: pointer;">
+          ${forceOptionsHtml}
+        </select>
+        <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem; line-height: 1.4;">
+          💡 <strong>Pricing Rules:</strong> Particular force: <strong>₹100</strong> (2 mo) / <strong>₹199</strong> (6 mo). All 60 Mocks across all forces: <strong>₹300</strong> (2 mo) / <strong>₹550</strong> (6 mo).
+        </div>
+      </div>
+
+      <!-- Live Plan Summary Box -->
       <div class="enrollment-summary-box">
         <div class="enrollment-summary-row">
           <span style="color: #94a3b8;">Candidate Name</span>
@@ -880,32 +941,19 @@ const App = (function () {
         </div>
         <div class="enrollment-summary-row">
           <span style="color: #94a3b8;">Selected Pass</span>
-          <span style="font-weight: 700; color: #6ee7b7;">${escapeHtml(pkgData.name)}</span>
+          <span id="enrollmentPlanNameDisplay" style="font-weight: 700; color: #6ee7b7;">${escapeHtml(initialPricing.name)}</span>
         </div>
         <div class="enrollment-summary-row">
           <span style="color: #94a3b8;">Mock Tests Quota</span>
-          <span style="font-weight: 600; color: #fff;">${pkgData.testsCount} Full-Length CBT Tests</span>
+          <span id="enrollmentQuotaDisplay" style="font-weight: 600; color: #fff;">${initialPricing.testsCount} Full-Length CBT Tests</span>
         </div>
         <div class="enrollment-summary-row">
           <span style="color: #94a3b8;">Validity Period</span>
-          <span style="font-weight: 600; color: #fff;">${pkgData.duration}</span>
+          <span id="enrollmentValidityDisplay" style="font-weight: 600; color: #fff;">${initialPricing.duration}</span>
         </div>
         <div class="enrollment-summary-row">
           <span>Total Payable Amount</span>
-          <span>₹${pkgData.price} Only</span>
-        </div>
-      </div>
-
-      <!-- Target Force Selection Option in Payment -->
-      <div style="margin: 1.25rem 0; background: rgba(30, 41, 59, 0.7); border: 1.5px solid #3b82f6; border-radius: 10px; padding: 1rem;">
-        <label for="enrollmentForceSelect" style="color: #60a5fa; font-size: 0.88rem; font-family: var(--font-military); letter-spacing: 1px; display: block; margin-bottom: 0.5rem; font-weight: 700;">
-          🎯 SELECT TARGET CAPF FORCE TO UNLOCK:
-        </label>
-        <select id="enrollmentForceSelect" style="width: 100%; padding: 0.75rem 0.85rem; background: #0b1324; border: 1px solid #3b82f6; border-radius: 8px; color: #fbbf24; font-size: 0.95rem; font-weight: 700; outline: none; cursor: pointer;">
-          ${forceOptionsHtml}
-        </select>
-        <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem; line-height: 1.4;">
-          ℹ️ <strong>Rule:</strong> Subscribing to this pass specifically unlocks tests for the chosen force. Other forces remain protected. <em>Free common mock tests remain free for all.</em>
+          <span id="enrollmentPriceDisplay" style="color: #fbbf24; font-size: 1.15rem; font-weight: 800;">₹${initialPricing.price} Only</span>
         </div>
       </div>
 
@@ -929,8 +977,8 @@ const App = (function () {
 
       <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
         <button class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
-        <button class="btn-3d btn-3d-success" style="flex: 2; font-size: 1rem;" onclick="App.confirmPackageEnrollment('${pkgData.id}')">
-          ⚡ Pay ₹${pkgData.price} & Activate Pass
+        <button class="btn-3d btn-3d-success" id="enrollmentPayBtn" data-pkg-id="${initialPricing.packageId}" style="flex: 2; font-size: 1rem;" onclick="App.confirmPackageEnrollment()">
+          ⚡ Pay ₹${initialPricing.price} & Activate Pass
         </button>
       </div>
     `;
@@ -957,6 +1005,7 @@ const App = (function () {
     if (user && user.activePackage && user.activePackage.status === 'ACTIVE') {
       const activePkg = user.activePackage;
       const expiryDate = new Date(activePkg.expiresAt).toLocaleDateString('en-IN');
+      const isAll = (activePkg.targetForce || '').toUpperCase() === 'ALL';
 
       // Insert top active pass notification ribbon
       const grid = document.querySelector('.packages-grid');
@@ -964,13 +1013,13 @@ const App = (function () {
         const ribbon = document.createElement('div');
         ribbon.id = 'activePassNoticeRibbon';
         ribbon.className = 'active-pass-notice-ribbon';
-        const targetForceBadge = activePkg.targetForce ? ` [${escapeHtml(activePkg.targetForce)} SPECIAL]` : '';
+        const targetForceBadge = isAll ? ' [ALL CAPF FORCES UNLOCKED]' : ` [${escapeHtml(activePkg.targetForce)} SPECIAL]`;
         ribbon.innerHTML = `
           <div class="active-pass-ribbon-left">
             <span class="active-pass-ribbon-badge">🟢 YOU HAVE AN ACTIVE PASS</span>
             <div style="display: flex; flex-direction: column; gap: 0.15rem;">
               <span class="active-pass-ribbon-title">${escapeHtml(activePkg.name)}${targetForceBadge}</span>
-              <span class="active-pass-ribbon-meta">🎯 Unlocked Force: <strong style="color: #fbbf24;">${escapeHtml(activePkg.targetForce || 'Paramilitary')}</strong> • Quota: <strong>${activePkg.testsCount} Full-Length Tests</strong> • ⏳ Valid until: <strong>${expiryDate}</strong></span>
+              <span class="active-pass-ribbon-meta">🎯 Unlocked Force: <strong style="color: #fbbf24;">${isAll ? 'ALL 6 CAPF FORCES' : escapeHtml(activePkg.targetForce)}</strong> • Quota: <strong>${activePkg.testsCount} Full-Length Tests</strong> • ⏳ Valid until: <strong>${expiryDate}</strong></span>
             </div>
           </div>
           <button class="btn-demo-pill" style="border-color: #34d399; color: #34d399;" onclick="App.switchView('studentView')">
@@ -980,7 +1029,24 @@ const App = (function () {
         grid.parentNode.insertBefore(ribbon, grid);
       }
 
-      if (activePkg.id === 'pkg_100_2m') {
+      if (isAll) {
+        pkg100.classList.add('pkg-card-active');
+        pkg199.classList.add('pkg-card-active');
+        if (action100) {
+          action100.innerHTML = `
+            <button class="btn-demo-pill" style="width: 100%; border-color: #34d399; color: #34d399; padding: 0.65rem;" onclick="App.switchView('studentView')">
+              ✓ All 60 Tests Unlocked & Active
+            </button>
+          `;
+        }
+        if (action199) {
+          action199.innerHTML = `
+            <button class="btn-3d btn-3d-success pkg-cta-btn" style="background: linear-gradient(180deg, #16a34a, #15803d); border-color: #4ade80; cursor: default;">
+              👑 ACTIVE ALL-FORCE PRO PASS (60 Tests Active)
+            </button>
+          `;
+        }
+      } else if (activePkg.durationMonths === 2 || activePkg.id === 'pkg_100_2m') {
         pkg100.classList.add('pkg-card-active');
         if (action100) {
           action100.innerHTML = `
@@ -996,7 +1062,7 @@ const App = (function () {
             </button>
           `;
         }
-      } else if (activePkg.id === 'pkg_199_6m') {
+      } else if (activePkg.durationMonths === 6 || activePkg.id === 'pkg_199_6m') {
         pkg199.classList.add('pkg-card-active');
         if (action199) {
           action199.innerHTML = `
@@ -1016,28 +1082,43 @@ const App = (function () {
     } else {
       if (action100) {
         action100.innerHTML = `
-          <button class="btn-3d btn-3d-secondary pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_100_2m')">
-            ⚡ Enroll in 2-Month Pass • ₹100
-          </button>
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <button class="btn-3d btn-3d-secondary pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_100_2m')">
+              ⚡ Single Force Pass • ₹100
+            </button>
+            <button class="btn-demo-pill" style="border-color: #38bdf8; color: #38bdf8; width: 100%; padding: 0.55rem; font-weight: 700; font-size: 0.82rem;" onclick="App.openPackageEnrollment('pkg_100_2m', 'ALL')">
+              🌟 All Forces (All 60 Mocks) • ₹300
+            </button>
+          </div>
         `;
       }
       if (action199) {
         action199.innerHTML = `
-          <button class="btn-3d pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_199_6m')">
-            👑 Unlock 6-Month Pro Pass • ₹199
-          </button>
+          <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+            <button class="btn-3d pkg-cta-btn" onclick="App.openPackageEnrollment('pkg_199_6m')">
+              ⚡ Single Force Pro • ₹199
+            </button>
+            <button class="btn-demo-pill" style="border-color: #fbbf24; color: #fbbf24; width: 100%; padding: 0.55rem; font-weight: 700; font-size: 0.82rem;" onclick="App.openPackageEnrollment('pkg_199_6m', 'ALL')">
+              👑 All Forces Mega Pro (All 60 Mocks) • ₹550
+            </button>
+          </div>
         `;
       }
     }
   }
 
-  async function confirmPackageEnrollment(packageId) {
+  async function confirmPackageEnrollment(overridePackageId = null) {
     try {
       const forceSelect = document.getElementById('enrollmentForceSelect');
       const targetForce = forceSelect ? forceSelect.value : 'CRPF';
+      const durationEl = document.querySelector('input[name="enrollmentDuration"]:checked');
+      const durationMonths = durationEl ? parseInt(durationEl.value, 10) : 2;
 
-      showToast(`Processing simulated payment & activating ${targetForce} Mock Test Pass...`, 'info');
-      const res = await API.subscribePackage(packageId, targetForce);
+      const pricing = getEnrollmentPricing(durationMonths, targetForce);
+      const packageId = overridePackageId || pricing.packageId;
+
+      showToast(`Processing simulated payment of ₹${pricing.price} & activating ${pricing.name}...`, 'info');
+      const res = await API.subscribePackage(packageId, targetForce, durationMonths);
 
       const pkg = res.package;
       const user = res.user;
@@ -1045,6 +1126,71 @@ const App = (function () {
       updateAuthUI();
       updatePackagesUI();
       loadTests(); // Refresh test cards so unlocked status reflects immediately
+
+      // Render official defense active pass confirmation modal
+      const receiptHtml = `
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <div style="width: 68px; height: 68px; border-radius: 50%; background: rgba(34, 197, 94, 0.15); border: 2px solid #22c55e; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem auto; font-size: 2.2rem; box-shadow: 0 0 25px rgba(34,197,94,0.3);">
+            ✅
+          </div>
+          <div style="display: inline-block; background: rgba(34,197,94,0.15); border: 1px solid #22c55e; color: #4ade80; font-family: var(--font-military); font-weight: 800; font-size: 0.82rem; letter-spacing: 1.5px; padding: 0.25rem 0.85rem; border-radius: 999px; margin-bottom: 0.5rem;">
+            🟢 PAYMENT SUCCESSFUL • PASS ACTIVE
+          </div>
+          <h2 style="color: #ffffff; font-size: 1.6rem; margin-top: 0.2rem;">${escapeHtml(pkg.name)}</h2>
+          <p style="color: #94a3b8; font-size: 0.88rem;">Official Defense CBT Exam Access has been permanently activated on your Roll Number for <strong>${escapeHtml(pkg.targetForce || targetForce)}</strong>.</p>
+        </div>
+
+        <div class="active-pass-receipt-box">
+          <div class="receipt-row">
+            <span class="receipt-label">Pass Status</span>
+            <span class="receipt-val" style="color: #4ade80; font-weight: 800;">🟢 ACTIVE PASS</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Assigned Candidate</span>
+            <span class="receipt-val">${escapeHtml(user.name)}</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Official Roll No</span>
+            <span class="receipt-val" style="font-family: monospace; color: #fbbf24;">${escapeHtml(user.rollNo)}</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Target Force Unlocked</span>
+            <span class="receipt-val" style="color: #38bdf8; font-weight: 800;">🛡️ ${escapeHtml(pkg.targetForce || targetForce)}</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Mock Tests Quota</span>
+            <span class="receipt-val" style="color: #6ee7b7; font-weight: 700;">${pkg.testsCount} Full-Length CBT Tests</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Pass Validity</span>
+            <span class="receipt-val">${pkg.durationMonths} Months (Valid until ${new Date(pkg.expiresAt).toLocaleDateString('en-IN')})</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Amount Paid</span>
+            <span class="receipt-val" style="color: #ffffff; font-weight: 700;">₹${pkg.price} (Verified)</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Transaction Reference</span>
+            <span class="receipt-val" style="font-family: monospace; color: #93c5fd;">${escapeHtml(pkg.transactionId || 'TXN-CB-849201')}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap;">
+          <button class="btn-3d btn-3d-success" style="flex: 1; min-width: 200px;" onclick="App.closeGeneralModal(); App.switchView('homeView'); document.getElementById('testsSection').scrollIntoView({behavior: 'smooth'});">
+            ⚡ Start CBT Mock Test Now
+          </button>
+          <button class="btn-3d btn-3d-secondary" style="flex: 1; min-width: 200px;" onclick="App.closeGeneralModal(); App.switchView('studentView');">
+            📊 View in Student Dashboard
+          </button>
+        </div>
+      `;
+
+      openGeneralModal(receiptHtml);
+      showToast(`🎉 Payment Confirmed! ${pkg.name} is now ACTIVE.`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Payment activation failed. Please try again.', 'error');
+    }
+  }
 
       // Render official defense active pass confirmation modal
       const receiptHtml = `
@@ -1290,6 +1436,8 @@ const App = (function () {
     toggleCombatSlider,
     openPackageEnrollment,
     confirmPackageEnrollment,
+    onEnrollmentConfigChange,
+    getEnrollmentPricing,
     checkPausedSession,
     handleEnquirySubmit,
     resetEnquiryForm

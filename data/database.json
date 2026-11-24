@@ -159,6 +159,106 @@
         "status": "ACTIVE",
         "transactionId": "TXN-CB-973258"
       }
+    },
+    {
+      "id": "usr_1795540524497_c44dr",
+      "name": "BSF Constable Ramesh",
+      "email": "bsf_1795540524446@test.in",
+      "password": "$2b$10$t/rczefstZzoVVJ1B3lqd.xo2isUeuZwkWFdYp9hGZ4/9ovQvhkYu",
+      "role": "student",
+      "targetExam": "BSF SI LDCE",
+      "force": "BSF",
+      "phone": "9811122233",
+      "rollNo": "BSFS-2026-2215",
+      "createdAt": "2026-11-24T17:15:24.631Z",
+      "activePackage": {
+        "id": "pkg_100_2m",
+        "name": "Tactical Pass (BSF Special - 10 Full-Length Tests - 2 Months)",
+        "targetForce": "BSF",
+        "price": 100,
+        "testsCount": 10,
+        "testsRemaining": 10,
+        "durationMonths": 2,
+        "subscribedAt": "2026-11-24T17:15:24.707Z",
+        "expiresAt": "2027-01-23T17:15:24.707Z",
+        "status": "ACTIVE",
+        "transactionId": "TXN-CB-280961"
+      }
+    },
+    {
+      "id": "usr_1795540524767_f67ml",
+      "name": "Inspector Ajay Commando",
+      "email": "all_2m_1795540524772@test.in",
+      "password": "$2b$10$BVpNavMSDRcC17k9L2iSLunqZ9BfC9vPOUIK8X5y7ZdI1VUiltChC",
+      "role": "student",
+      "targetExam": "All CAPFs",
+      "force": "CAPF",
+      "phone": "9822233344",
+      "rollNo": "ALLC-2026-6895",
+      "createdAt": "2026-11-24T17:15:24.877Z",
+      "activePackage": {
+        "id": "pkg_all_2m",
+        "name": "Tactical All-Force Pass (All 60 Full-Length Mocks - 2 Months)",
+        "targetForce": "ALL",
+        "price": 300,
+        "testsCount": 60,
+        "testsRemaining": 60,
+        "durationMonths": 2,
+        "subscribedAt": "2026-11-24T17:15:24.926Z",
+        "expiresAt": "2027-01-23T17:15:24.926Z",
+        "status": "ACTIVE",
+        "transactionId": "TXN-CB-649617"
+      }
+    },
+    {
+      "id": "usr_1795540524973_c44k6",
+      "name": "ITBP Sub-Inspector Suresh",
+      "email": "itbp_1795540524979@test.in",
+      "password": "$2b$10$1CEJpZwKSAasvWd/lswrhe1e/AJswX08q9xqkqqZnUHH8luWEP0rO",
+      "role": "student",
+      "targetExam": "ITBP LDCE",
+      "force": "ITBP",
+      "phone": "9833344455",
+      "rollNo": "ITBP-2026-8357",
+      "createdAt": "2026-11-24T17:15:25.066Z",
+      "activePackage": {
+        "id": "pkg_199_6m",
+        "name": "Commando Pro Pass (ITBP Special - 10 Full-Length Tests - 6 Months)",
+        "targetForce": "ITBP",
+        "price": 199,
+        "testsCount": 10,
+        "testsRemaining": 10,
+        "durationMonths": 6,
+        "subscribedAt": "2026-11-24T17:15:25.120Z",
+        "expiresAt": "2027-05-23T17:15:25.120Z",
+        "status": "ACTIVE",
+        "transactionId": "TXN-CB-203094"
+      }
+    },
+    {
+      "id": "usr_1795540525163_zzzvl",
+      "name": "Major Vikram Batra All-Forces",
+      "email": "all_6m_1795540525170@test.in",
+      "password": "$2b$10$MFiPJTdGIXWG3Y3qk94vWO0UETcYN3Muv.6VgURm4C59op3Wexslu",
+      "role": "student",
+      "targetExam": "UPSC CAPF (AC)",
+      "force": "CAPF",
+      "phone": "9844455566",
+      "rollNo": "UPSC-2026-1962",
+      "createdAt": "2026-11-24T17:15:25.262Z",
+      "activePackage": {
+        "id": "pkg_all_6m",
+        "name": "Commando All-Force Pro Pass (All 60 Full-Length Mocks - 6 Months)",
+        "targetForce": "ALL",
+        "price": 550,
+        "testsCount": 60,
+        "testsRemaining": 60,
+        "durationMonths": 6,
+        "subscribedAt": "2026-11-24T17:15:25.311Z",
+        "expiresAt": "2027-05-23T17:15:25.311Z",
+        "status": "ACTIVE",
+        "transactionId": "TXN-CB-512681"
+      }
     }
   ],
   "tests": [

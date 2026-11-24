@@ -103,10 +103,10 @@ const API = (function () {
       return await request('/api/auth/me');
     },
 
-    async subscribePackage(packageId, targetForce) {
+    async subscribePackage(packageId, targetForce, durationMonths) {
       const res = await request('/api/auth/subscribe-package', {
         method: 'POST',
-        body: JSON.stringify({ packageId, targetForce })
+        body: JSON.stringify({ packageId, targetForce, durationMonths })
       });
       if (res.user) {
         setUser(res.user);

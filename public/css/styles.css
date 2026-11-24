@@ -3648,6 +3648,13 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateX(4px);
 }
 
+.whatsapp-channel-item:hover {
+  background: rgba(34, 197, 94, 0.16) !important;
+  border-color: rgba(34, 197, 94, 0.6) !important;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.25);
+  transform: translateX(4px);
+}
+
 .channel-icon {
   font-size: 1.5rem;
   width: 42px;

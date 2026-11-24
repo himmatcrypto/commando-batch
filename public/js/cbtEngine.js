@@ -42,10 +42,23 @@ const CBTEngine = (function () {
 
       // Check if test is in paid section and candidate does not have active pass (admin bypasses)
       const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE';
-      if (activeTest.isPaid && !hasActivePass && user.role !== 'admin') {
-        App.showToast(`This ${activeTest.force || 'CAPF'} mock test requires an active Tactical Pass (₹100) or Commando Pro Pass (₹199).`, 'warning');
-        App.openPackageEnrollment('pkg_100_2m');
-        return;
+      if (activeTest.isPaid && user.role !== 'admin') {
+        if (!hasActivePass) {
+          App.showToast(`This ${activeTest.force || 'CAPF'} mock test requires an active Tactical Pass (₹100) or Commando Pro Pass (₹199).`, 'warning');
+          App.openPackageEnrollment('pkg_100_2m', activeTest.force || 'CRPF');
+          return;
+        }
+
+        const passForce = (user.activePackage && user.activePackage.targetForce) || '';
+        const isForceMatch = passForce.toUpperCase() === 'ALL' || (
+          activeTest.force && passForce && activeTest.force.trim().toLowerCase() === passForce.trim().toLowerCase()
+        );
+
+        if (!isForceMatch) {
+          App.showToast(`Your active pass is for ${passForce}. To access ${activeTest.force} mock tests, please unlock a ${activeTest.force} pass.`, 'warning');
+          App.openPackageEnrollment('pkg_100_2m', activeTest.force || 'CRPF');
+          return;
+        }
       }
 
       // Reset test state

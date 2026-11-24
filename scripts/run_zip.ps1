@@ -1,0 +1,1 @@
+Compress-Archive -Path public, server, data, scripts, package.json, .gitignore, README.md -DestinationPath "C:\Users\HP\commando-batch-github-ready.zip" -Force

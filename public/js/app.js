@@ -225,6 +225,7 @@ const App = (function () {
 
     const user = API.getUser();
     const hasActivePass = user && user.activePackage && user.activePackage.status === 'ACTIVE';
+    const passForce = hasActivePass ? (user.activePackage.targetForce || '') : '';
 
     grid.innerHTML = tests.map(test => {
       const catLower = test.category ? test.category.toLowerCase() : '';
@@ -242,21 +243,38 @@ const App = (function () {
       }
 
       const isPaidTest = !!test.isPaid;
-      const isUnlocked = hasActivePass || (user && user.role === 'admin');
+      // Force-specific unlock check:
+      // Free mocks (isPaid=false) are unlocked for all candidates.
+      // Admin bypasses all checks.
+      // Candidate with active pass:
+      // - If passForce === 'ALL', all force tests are unlocked.
+      // - Otherwise, only tests matching test.force are unlocked.
+      const isForceMatch = hasActivePass && (
+        passForce.toUpperCase() === 'ALL' ||
+        (test.force && passForce && test.force.trim().toLowerCase() === passForce.trim().toLowerCase())
+      );
+      const isUnlocked = !isPaidTest || (user && user.role === 'admin') || isForceMatch;
 
       let passTagHtml = '';
       if (isPaidTest) {
         if (isUnlocked) {
           passTagHtml = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin: 0.5rem 0; padding: 0.35rem 0.65rem; background: rgba(34, 197, 94, 0.12); border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.3);">
-              <span class="test-pass-unlocked-tag">🟢 Included in Active Pass</span>
+              <span class="test-pass-unlocked-tag">🟢 Included in ${escapeHtml(passForce || test.force)} Pass</span>
               <span style="font-size: 0.72rem; color: #4ade80; font-family: var(--font-military); letter-spacing: 0.5px; font-weight: 700;">✓ UNLOCKED</span>
+            </div>
+          `;
+        } else if (hasActivePass) {
+          passTagHtml = `
+            <div class="test-pass-locked-tag" style="background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35);">
+              <span style="color: #f87171;">🔒 ${escapeHtml(test.force || 'CAPF')} Pass Required</span>
+              <span style="font-size: 0.72rem; color: #fbbf24; font-family: var(--font-military); font-weight: 700;">ACTIVE: ${escapeHtml(passForce)}</span>
             </div>
           `;
         } else {
           passTagHtml = `
             <div class="test-pass-locked-tag">
-              <span>🔒 Paid Force Pass</span>
+              <span>🔒 ${escapeHtml(test.force || 'CAPF')} Paid Pass</span>
               <span style="font-size: 0.72rem; color: #fbbf24; font-family: var(--font-military); font-weight: 700;">₹100 / ₹199 PASS</span>
             </div>
           `;
@@ -264,8 +282,8 @@ const App = (function () {
       } else {
         passTagHtml = `
           <div style="display: flex; align-items: center; justify-content: space-between; margin: 0.5rem 0; padding: 0.35rem 0.65rem; background: rgba(56, 189, 248, 0.08); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
-            <span style="font-size: 0.75rem; color: #38bdf8; font-family: var(--font-military); font-weight: 700;">🆓 Free Open Mock</span>
-            <span style="font-size: 0.72rem; color: #38bdf8; font-family: var(--font-military);">AVAILABLE</span>
+            <span style="font-size: 0.75rem; color: #38bdf8; font-family: var(--font-military); font-weight: 700;">🆓 Free Open Mock (100 Qs)</span>
+            <span style="font-size: 0.72rem; color: #38bdf8; font-family: var(--font-military);">COMMON FOR ALL</span>
           </div>
         `;
       }
@@ -273,8 +291,8 @@ const App = (function () {
       let btnActionHtml = '';
       if (isPaidTest && !isUnlocked) {
         btnActionHtml = `
-          <button class="btn-3d" style="width: 100%; background: linear-gradient(180deg, #d97706, #b45309); border-color: #f59e0b;" onclick="CBTEngine.startTest('${test.id}')">
-            👑 Unlock with Pass • Start CBT
+          <button class="btn-3d" style="width: 100%; background: linear-gradient(180deg, #d97706, #b45309); border-color: #f59e0b;" onclick="App.openPackageEnrollment('pkg_100_2m', '${escapeHtml(test.force || 'CRPF')}')">
+            👑 Unlock ${escapeHtml(test.force || 'CAPF')} Pass • ₹100
           </button>
         `;
       } else {
@@ -798,10 +816,10 @@ const App = (function () {
   // =========================================================================
   // MOCK TEST PACKAGES COMMERCE ENROLLMENT
   // =========================================================================
-  function openPackageEnrollment(packageId) {
+  function openPackageEnrollment(packageId = 'pkg_100_2m', preselectedForce = '') {
     const user = API.getUser();
     if (!user) {
-      openAuthModal('login', () => openPackageEnrollment(packageId));
+      openAuthModal('login', () => openPackageEnrollment(packageId, preselectedForce));
       showToast('Please sign in with your candidate account to enroll in test passes.', 'info');
       return;
     }
@@ -831,6 +849,18 @@ const App = (function () {
       duration: '2 Months',
       badge: 'PASS'
     };
+
+    // Determine initial force to select
+    const defaultForce = preselectedForce || (user.activePackage && user.activePackage.targetForce) || user.force || 'CRPF';
+    const forces = ['CRPF', 'CISF', 'BSF', 'ITBP', 'SSB', 'Assam Rifles', 'ALL'];
+
+    const forceOptionsHtml = forces.map(f => {
+      const isSelected = f.toLowerCase() === defaultForce.toLowerCase() ? 'selected' : '';
+      const label = f === 'ALL'
+        ? 'ALL CAPF FORCES (Full Access - All 60 Mocks)'
+        : `${f} (10 Full-Length Mocks • 100 Qs each)`;
+      return `<option value="${escapeHtml(f)}" ${isSelected}>${label}</option>`;
+    }).join('');
 
     const modalContent = `
       <div style="text-align: center; margin-bottom: 1.25rem;">
@@ -863,6 +893,19 @@ const App = (function () {
         <div class="enrollment-summary-row">
           <span>Total Payable Amount</span>
           <span>₹${pkgData.price} Only</span>
+        </div>
+      </div>
+
+      <!-- Target Force Selection Option in Payment -->
+      <div style="margin: 1.25rem 0; background: rgba(30, 41, 59, 0.7); border: 1.5px solid #3b82f6; border-radius: 10px; padding: 1rem;">
+        <label for="enrollmentForceSelect" style="color: #60a5fa; font-size: 0.88rem; font-family: var(--font-military); letter-spacing: 1px; display: block; margin-bottom: 0.5rem; font-weight: 700;">
+          🎯 SELECT TARGET CAPF FORCE TO UNLOCK:
+        </label>
+        <select id="enrollmentForceSelect" style="width: 100%; padding: 0.75rem 0.85rem; background: #0b1324; border: 1px solid #3b82f6; border-radius: 8px; color: #fbbf24; font-size: 0.95rem; font-weight: 700; outline: none; cursor: pointer;">
+          ${forceOptionsHtml}
+        </select>
+        <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem; line-height: 1.4;">
+          ℹ️ <strong>Rule:</strong> Subscribing to this pass specifically unlocks tests for the chosen force. Other forces remain protected. <em>Free common mock tests remain free for all.</em>
         </div>
       </div>
 
@@ -921,12 +964,13 @@ const App = (function () {
         const ribbon = document.createElement('div');
         ribbon.id = 'activePassNoticeRibbon';
         ribbon.className = 'active-pass-notice-ribbon';
+        const targetForceBadge = activePkg.targetForce ? ` [${escapeHtml(activePkg.targetForce)} SPECIAL]` : '';
         ribbon.innerHTML = `
           <div class="active-pass-ribbon-left">
             <span class="active-pass-ribbon-badge">🟢 YOU HAVE AN ACTIVE PASS</span>
             <div style="display: flex; flex-direction: column; gap: 0.15rem;">
-              <span class="active-pass-ribbon-title">${escapeHtml(activePkg.name)}</span>
-              <span class="active-pass-ribbon-meta">🎯 Quota: <strong>${activePkg.testsCount} Full-Length Tests</strong> • ⏳ Valid until: <strong>${expiryDate}</strong></span>
+              <span class="active-pass-ribbon-title">${escapeHtml(activePkg.name)}${targetForceBadge}</span>
+              <span class="active-pass-ribbon-meta">🎯 Unlocked Force: <strong style="color: #fbbf24;">${escapeHtml(activePkg.targetForce || 'Paramilitary')}</strong> • Quota: <strong>${activePkg.testsCount} Full-Length Tests</strong> • ⏳ Valid until: <strong>${expiryDate}</strong></span>
             </div>
           </div>
           <button class="btn-demo-pill" style="border-color: #34d399; color: #34d399;" onclick="App.switchView('studentView')">
@@ -941,7 +985,7 @@ const App = (function () {
         if (action100) {
           action100.innerHTML = `
             <button class="btn-3d btn-3d-success pkg-cta-btn" style="background: linear-gradient(180deg, #16a34a, #15803d); border-color: #4ade80; cursor: default;">
-              ✓ ACTIVE PASS (10 Tests Quota Active)
+              ✓ ACTIVE PASS (${escapeHtml(activePkg.targetForce || 'CRPF')} - 10 Tests Active)
             </button>
           `;
         }
@@ -957,7 +1001,7 @@ const App = (function () {
         if (action199) {
           action199.innerHTML = `
             <button class="btn-3d btn-3d-success pkg-cta-btn" style="background: linear-gradient(180deg, #16a34a, #15803d); border-color: #4ade80; cursor: default;">
-              👑 ACTIVE PRO PASS (20 Tests Quota Active)
+              👑 ACTIVE PRO PASS (${escapeHtml(activePkg.targetForce || 'ALL')} - Active)
             </button>
           `;
         }
@@ -989,14 +1033,18 @@ const App = (function () {
 
   async function confirmPackageEnrollment(packageId) {
     try {
-      showToast('Processing simulated payment & activating mock test quota...', 'info');
-      const res = await API.subscribePackage(packageId);
+      const forceSelect = document.getElementById('enrollmentForceSelect');
+      const targetForce = forceSelect ? forceSelect.value : 'CRPF';
+
+      showToast(`Processing simulated payment & activating ${targetForce} Mock Test Pass...`, 'info');
+      const res = await API.subscribePackage(packageId, targetForce);
 
       const pkg = res.package;
       const user = res.user;
 
       updateAuthUI();
       updatePackagesUI();
+      loadTests(); // Refresh test cards so unlocked status reflects immediately
 
       // Render official defense active pass confirmation modal
       const receiptHtml = `
@@ -1008,7 +1056,7 @@ const App = (function () {
             🟢 PAYMENT SUCCESSFUL • PASS ACTIVE
           </div>
           <h2 style="color: #ffffff; font-size: 1.6rem; margin-top: 0.2rem;">${escapeHtml(pkg.name)}</h2>
-          <p style="color: #94a3b8; font-size: 0.88rem;">Official Defense CBT Exam Access has been permanently activated on your Roll Number.</p>
+          <p style="color: #94a3b8; font-size: 0.88rem;">Official Defense CBT Exam Access has been permanently activated on your Roll Number for <strong>${escapeHtml(pkg.targetForce || targetForce)}</strong>.</p>
         </div>
 
         <div class="active-pass-receipt-box">
@@ -1023,6 +1071,10 @@ const App = (function () {
           <div class="receipt-row">
             <span class="receipt-label">Official Roll No</span>
             <span class="receipt-val" style="font-family: monospace; color: #fbbf24;">${escapeHtml(user.rollNo)}</span>
+          </div>
+          <div class="receipt-row">
+            <span class="receipt-label">Target Force Unlocked</span>
+            <span class="receipt-val" style="color: #38bdf8; font-weight: 800;">🛡️ ${escapeHtml(pkg.targetForce || targetForce)}</span>
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Mock Tests Quota</span>

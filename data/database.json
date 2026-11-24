@@ -134,6 +134,31 @@
         "status": "ACTIVE",
         "transactionId": "TXN-CB-772617"
       }
+    },
+    {
+      "id": "usr_1795539820271_4p3k4",
+      "name": "Inspector Vikram CISF",
+      "email": "candidate_1795539820201@force.test",
+      "password": "$2b$10$FmbwqiRv6FaZmyHlYBY0Ye/qiTMvYvn/FnxQP2.mnkODHh8FjouxC",
+      "role": "student",
+      "targetExam": "CISF LDCE",
+      "force": "CISF",
+      "phone": "9876543210",
+      "rollNo": "CISF-2026-6571",
+      "createdAt": "2026-11-24T17:03:40.396Z",
+      "activePackage": {
+        "id": "pkg_100_2m",
+        "name": "Tactical Pass (CISF Special - 10 Full-Length Tests)",
+        "targetForce": "CISF",
+        "price": 100,
+        "testsCount": 10,
+        "testsRemaining": 10,
+        "durationMonths": 2,
+        "subscribedAt": "2026-11-24T17:03:40.473Z",
+        "expiresAt": "2027-01-23T17:03:40.473Z",
+        "status": "ACTIVE",
+        "transactionId": "TXN-CB-973258"
+      }
     }
   ],
   "tests": [

@@ -137,13 +137,15 @@ router.get('/me', requireAuth, (req, res) => {
 // Subscribe to Mock Test Package (₹100 for 2 months / ₹199 for 6 months)
 router.post('/subscribe-package', requireAuth, (req, res) => {
   try {
-    const { packageId } = req.body;
+    const { packageId, targetForce } = req.body;
     let pkgDetails = null;
+    const forceName = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'CRPF';
 
     if (packageId === 'pkg_100_2m') {
       pkgDetails = {
         id: 'pkg_100_2m',
-        name: 'Tactical Pass (10 Full-Length Tests)',
+        name: `Tactical Pass (${forceName} Special - 10 Full-Length Tests)`,
+        targetForce: forceName,
         price: 100,
         testsCount: 10,
         testsRemaining: 10,
@@ -156,10 +158,11 @@ router.post('/subscribe-package', requireAuth, (req, res) => {
     } else if (packageId === 'pkg_199_6m') {
       pkgDetails = {
         id: 'pkg_199_6m',
-        name: 'Commando Pro Pass (20 Full-Length Tests)',
+        name: `Commando Pro Pass (${forceName === 'ALL' ? 'All CAPF Forces' : forceName} - 6 Months)`,
+        targetForce: forceName,
         price: 199,
-        testsCount: 20,
-        testsRemaining: 20,
+        testsCount: forceName === 'ALL' ? 60 : 10,
+        testsRemaining: forceName === 'ALL' ? 60 : 10,
         durationMonths: 6,
         subscribedAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),

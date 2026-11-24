@@ -18,8 +18,16 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static frontend assets
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Serve static frontend assets with no-cache headers so updates reflect immediately
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+}));
 
 // Seed database on startup if empty
 function initializeSeedData() {

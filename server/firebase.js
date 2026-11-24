@@ -8,7 +8,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const admin = require('firebase-admin');
+const { initializeApp, getApps, cert } = require('firebase-admin/app');
+const { getFirestore: getAdminFirestore } = require('firebase-admin/firestore');
+const { getAuth: getAdminAuth } = require('firebase-admin/auth');
 
 let firestoreDb = null;
 let firebaseAuth = null;
@@ -68,14 +70,14 @@ function initFirebase() {
   }
 
   try {
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+    if (!getApps().length) {
+      initializeApp({
+        credential: cert(serviceAccount),
         projectId: serviceAccount.project_id
       });
     }
-    firestoreDb = admin.firestore();
-    firebaseAuth = admin.auth();
+    firestoreDb = getAdminFirestore();
+    firebaseAuth = getAdminAuth();
     activeProjectId = serviceAccount.project_id;
     console.log(`🔥 Firebase Admin & Cloud Firestore connected! Project: ${activeProjectId}`);
     return { connected: true, projectId: activeProjectId };

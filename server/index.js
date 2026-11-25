@@ -85,13 +85,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`================================================================`);
-  console.log(` COMMANDO BATCH - DEFENSE & COMPETITIVE EXAM PLATFORM`);
-  console.log(` Target Exams: SSC | Bank | CAPF | SI | LDCE (CRPF / CISF)`);
-  console.log(` Server running live at: http://localhost:${PORT}`);
-  console.log(` Demo Admin: admin@commandobatch.gov.in / admin123`);
-  console.log(` Demo Student: commando@student.in / student123`);
-  console.log(`================================================================`);
-});
+// Start server only when run directly (not when imported by Firebase Cloud Functions)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`================================================================`);
+    console.log(` COMMANDO BATCH - DEFENSE & COMPETITIVE EXAM PLATFORM`);
+    console.log(` Target Exams: SSC | Bank | CAPF | SI | LDCE (CRPF / CISF)`);
+    console.log(` Server running live at: http://localhost:${PORT}`);
+    console.log(` Demo Admin: admin@commandobatch.gov.in / admin123`);
+    console.log(` Demo Student: commando@student.in / student123`);
+    console.log(`================================================================`);
+  });
+}
+
+module.exports = app;

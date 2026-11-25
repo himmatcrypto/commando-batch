@@ -1,0 +1,11 @@
+{
+  "name": "commando-batch-functions",
+  "description": "Firebase Cloud Functions backend for Commando Batch",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-functions": "^5.0.0"
+  }
+}

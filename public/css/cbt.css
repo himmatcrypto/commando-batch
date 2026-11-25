@@ -4,12 +4,17 @@
 .cbt-container {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   z-index: 5000;
   background: #f1f5f9;
   color: #1e293b;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -442,6 +447,18 @@
   font-weight: 700;
   color: #1e293b;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-cbt-palette-toggle,
+.btn-cbt-palette-close {
+  display: none;
+}
+
+.cbt-palette-backdrop {
+  display: none;
 }
 
 /* Legend with standard TCS iON symbols */
@@ -806,5 +823,227 @@
   margin-top: 1.25rem;
   font-size: 0.8rem;
   color: #64748b;
+}
+
+/* ==========================================================================
+   CROSS-DEVICE CBT EXAMINER RESPONSIVE RULES (ANDROID, iOS, TABLET)
+   ========================================================================== */
+@media (max-width: 992px) {
+  .cbt-header {
+    padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .cbt-header-left {
+    gap: 0.6rem;
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+
+  .cbt-exam-logo {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  .cbt-exam-info h2 {
+    font-size: 0.88rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cbt-exam-info p {
+    font-size: 0.65rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cbt-header-right {
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .cbt-candidate-box {
+    display: none;
+  }
+
+  .cbt-timer-box {
+    padding: 0.25rem 0.6rem;
+  }
+
+  .cbt-timer-label {
+    display: none;
+  }
+
+  .cbt-timer-display {
+    font-size: 1rem;
+  }
+
+  .btn-cbt-header-pause,
+  .btn-cbt-header-home,
+  .btn-cbt-header-submit {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.76rem;
+    min-height: 36px;
+  }
+
+  .cbt-sub-header {
+    padding: 0 0.65rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .cbt-sections-list {
+    flex: 1 1 100%;
+    padding-top: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cbt-section-tab {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.76rem;
+  }
+
+  .cbt-language-selector {
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .cbt-language-selector span {
+    display: none;
+  }
+
+  .btn-cbt-palette-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #1e3a8a;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 36px;
+    margin-left: auto;
+  }
+
+  /* Switch CBT Workspace from split grid to full-width 1-column + slide-over palette */
+  .cbt-body {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  .cbt-question-area {
+    border-right: none;
+    min-height: 0;
+  }
+
+  .cbt-palette-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(88vw, 330px);
+    z-index: 5200;
+    transform: translateX(105%);
+    transition: transform 0.25s ease;
+    box-shadow: -8px 0 28px rgba(15, 23, 42, 0.35);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .cbt-palette-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .cbt-palette-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 5150;
+  }
+
+  .btn-cbt-palette-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: #cbd5e1;
+    color: #0f172a;
+    border: none;
+    font-weight: 800;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 640px) {
+  .cbt-q-header {
+    padding: 0.6rem 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .cbt-q-content {
+    padding: 1rem 0.85rem;
+  }
+
+  .cbt-q-text {
+    font-size: 0.96rem;
+    margin-bottom: 1.1rem;
+  }
+
+  .cbt-option-item {
+    padding: 0.8rem 0.85rem;
+    gap: 0.6rem;
+    min-height: 48px;
+  }
+
+  .cbt-option-text {
+    font-size: 0.9rem;
+  }
+
+  .cbt-action-footer {
+    padding: 0.65rem 0.75rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .cbt-actions-left,
+  .cbt-actions-right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .cbt-actions-right {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-cbt-action {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+
+  .cbt-pause-stats {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
 }
 

@@ -456,8 +456,14 @@ const CBTEngine = (function () {
             <span>View in:</span>
             <button class="cbt-lang-btn ${currentLang === 'en' ? 'active' : ''}" onclick="CBTEngine.setLanguage('en')">English</button>
             <button class="cbt-lang-btn ${currentLang === 'hi' ? 'active' : ''}" onclick="CBTEngine.setLanguage('hi')">हिन्दी</button>
+            <button class="btn-cbt-palette-toggle" onclick="CBTEngine.togglePalette()" title="Toggle Question Palette">
+              ☰ Palette
+            </button>
           </div>
         </div>
+
+        <!-- Mobile Palette Backdrop -->
+        <div class="cbt-palette-backdrop" id="cbtPaletteBackdrop" onclick="CBTEngine.togglePalette(false)"></div>
 
         <!-- Main Body -->
         <div class="cbt-body">
@@ -466,9 +472,12 @@ const CBTEngine = (function () {
             <!-- Dynamic Question Content Injected Here -->
           </div>
 
-          <!-- Question Palette (Right) -->
-          <div class="cbt-palette-sidebar">
-            <div class="cbt-palette-header">Question Palette</div>
+          <!-- Question Palette (Right / Slide-over Drawer on Mobile & Tablet) -->
+          <div class="cbt-palette-sidebar" id="cbtPaletteSidebar">
+            <div class="cbt-palette-header">
+              <span>Question Palette</span>
+              <button class="btn-cbt-palette-close" onclick="CBTEngine.togglePalette(false)" aria-label="Close palette">✕</button>
+            </div>
             
             <!-- Standard TCS iON Legend -->
             <div class="cbt-legend-grid">
@@ -695,6 +704,9 @@ const CBTEngine = (function () {
 
   function jumpToQuestion(index) {
     renderQuestion(index);
+    if (window.innerWidth <= 992) {
+      togglePalette(false);
+    }
   }
 
   function switchSection(sectionName) {
@@ -842,8 +854,18 @@ const CBTEngine = (function () {
       .replace(/'/g, '&#039;');
   }
 
+  function togglePalette(forceState) {
+    const sidebar = document.getElementById('cbtPaletteSidebar');
+    const backdrop = document.getElementById('cbtPaletteBackdrop');
+    if (!sidebar) return;
+    const nextOpen = typeof forceState === 'boolean' ? forceState : !sidebar.classList.contains('open');
+    sidebar.classList.toggle('open', nextOpen);
+    if (backdrop) backdrop.classList.toggle('open', nextOpen);
+  }
+
   return {
     init,
+    togglePalette,
     startTest,
     pauseTest,
     resumeTest,

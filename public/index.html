@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Commando Batch | Defense & Competitive Exam CBT Mock Test Portal</title>
   <meta name="description" content="Realistic 3D Computer Based Mock Test Platform for SSC, Bank, CAPF (AC), Sub-Inspector (SI), and CRPF/CISF LDCE Departmental Examinations.">
+  <meta name="theme-color" content="#0a110e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Commando Batch">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L88 22 L88 55 C88 75 50 95 50 95 C50 95 12 75 12 55 L12 22 Z' fill='%230f1f17' stroke='%23fbbf24' stroke-width='5'/%3E%3Cpolygon points='50,28 55,42 70,42 58,52 62,66 50,57 38,66 42,52 30,42 45,42' fill='%23fbbf24'/%3E%3C/svg%3E">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,8 +20,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Rajdhani:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- CSS Stylesheets -->
-  <link rel="stylesheet" href="css/styles.css?v=20261126">
-  <link rel="stylesheet" href="css/cbt.css?v=20261126">
+  <link rel="stylesheet" href="css/styles.css?v=20261126c">
+  <link rel="stylesheet" href="css/cbt.css?v=20261126c">
 
   <!-- Three.js for 3D Realistic Badge -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -67,35 +75,42 @@
         </div>
       </a>
 
-      <!-- Navigation Links -->
-      <nav class="nav-links">
-        <button class="nav-btn active" data-view="homeView">Home</button>
-        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('testsSection').scrollIntoView({behavior:'smooth'})">Mock Tests</button>
-        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('packagesSection').scrollIntoView({behavior:'smooth'})">🎖️ Test Passes (From ₹100)</button>
-        <button class="nav-btn" onclick="App.switchView('homeView'); document.getElementById('enquirySection').scrollIntoView({behavior:'smooth'})">💬 Exam Enquiry</button>
-        <button class="nav-btn" id="navStudentLink" data-view="studentView" style="display: none;">Student Panel</button>
-        <button class="nav-btn" id="navAdminLink" data-view="adminView" style="display: none; border-color: #ef4444; color: #f87171;">🛡️ Admin Panel</button>
-      </nav>
+      <!-- Navigation & Auth Wrapper (collapses cleanly into mobile/tablet drawer) -->
+      <button class="nav-mobile-toggle" id="navMobileToggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" onclick="App.toggleMobileMenu()">
+        <span></span><span></span><span></span>
+      </button>
 
-      <!-- Auth Actions -->
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <!-- Guest Actions -->
-        <div id="navGuestActions" style="display: flex; gap: 0.65rem;">
-          <button class="btn-demo-pill" onclick="App.openAuthModal('login')">Candidate Login</button>
-          <button class="btn-demo-pill" style="border-color: #ef4444; color: #fca5a5;" onclick="App.openAuthModal('admin-login')">🛡️ Admin Login</button>
-          <button class="btn-3d" style="padding: 0.45rem 1.1rem; font-size: 0.9rem;" onclick="App.openAuthModal('register')">Register Free</button>
-        </div>
+      <div class="nav-menu-container" id="navMenuContainer">
+        <!-- Navigation Links -->
+        <nav class="nav-links">
+          <button class="nav-btn active" data-view="homeView">Home</button>
+          <button class="nav-btn" onclick="App.toggleMobileMenu(false); App.switchView('homeView'); document.getElementById('testsSection').scrollIntoView({behavior:'smooth'})">Mock Tests</button>
+          <button class="nav-btn" onclick="App.toggleMobileMenu(false); App.switchView('homeView'); document.getElementById('packagesSection').scrollIntoView({behavior:'smooth'})">🎖️ Test Passes (From ₹100)</button>
+          <button class="nav-btn" onclick="App.toggleMobileMenu(false); App.switchView('homeView'); document.getElementById('enquirySection').scrollIntoView({behavior:'smooth'})">💬 Exam Enquiry</button>
+          <button class="nav-btn" id="navStudentLink" data-view="studentView" style="display: none;">Student Panel</button>
+          <button class="nav-btn" id="navAdminLink" data-view="adminView" style="display: none; border-color: #ef4444; color: #f87171;">🛡️ Admin Panel</button>
+        </nav>
 
-        <!-- Logged-in User Pill -->
-        <div id="navUserActions" style="display: none; align-items: center; gap: 0.75rem;">
-          <div class="user-pill" onclick="App.switchView('studentView')">
-            <div class="user-badge" id="navUserBadge">C</div>
-            <div class="user-info-text">
-              <span class="uname" id="navUserName">Candidate</span>
-              <span class="urole" id="navUserRole">LDCE ASPIRANT</span>
-            </div>
+        <!-- Auth Actions -->
+        <div class="nav-auth-wrap" style="display: flex; align-items: center; gap: 0.75rem;">
+          <!-- Guest Actions -->
+          <div id="navGuestActions" style="display: flex; gap: 0.65rem;">
+            <button class="btn-demo-pill" onclick="App.toggleMobileMenu(false); App.openAuthModal('login')">Candidate Login</button>
+            <button class="btn-demo-pill" style="border-color: #ef4444; color: #fca5a5;" onclick="App.toggleMobileMenu(false); App.openAuthModal('admin-login')">🛡️ Admin Login</button>
+            <button class="btn-3d" style="padding: 0.45rem 1.1rem; font-size: 0.9rem;" onclick="App.toggleMobileMenu(false); App.openAuthModal('register')">Register Free</button>
           </div>
-          <button class="btn-demo-pill" style="border-color: #ef4444; color: #f87171;" onclick="App.handleLogout()">Logout</button>
+
+          <!-- Logged-in User Pill -->
+          <div id="navUserActions" style="display: none; align-items: center; gap: 0.75rem;">
+            <div class="user-pill" onclick="App.toggleMobileMenu(false); App.switchView('studentView')">
+              <div class="user-badge" id="navUserBadge">C</div>
+              <div class="user-info-text">
+                <span class="uname" id="navUserName">Candidate</span>
+                <span class="urole" id="navUserRole">LDCE ASPIRANT</span>
+              </div>
+            </div>
+            <button class="btn-demo-pill" style="border-color: #ef4444; color: #f87171;" onclick="App.toggleMobileMenu(false); App.handleLogout()">Logout</button>
+          </div>
         </div>
       </div>
     </div>
@@ -806,14 +821,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="js/firebaseConfig.js?v=20261126b"></script>
+  <script src="js/firebaseConfig.js?v=20261126c"></script>
 
   <!-- App Scripts -->
-  <script src="js/threeBadge.js?v=20261126b"></script>
-  <script src="js/api.js?v=20261126b"></script>
-  <script src="js/cbtEngine.js?v=20261126b"></script>
-  <script src="js/scorecard.js?v=20261126b"></script>
-  <script src="js/admin.js?v=20261126b"></script>
-  <script src="js/app.js?v=20261126b"></script>
+  <script src="js/threeBadge.js?v=20261126c"></script>
+  <script src="js/api.js?v=20261126c"></script>
+  <script src="js/cbtEngine.js?v=20261126c"></script>
+  <script src="js/scorecard.js?v=20261126c"></script>
+  <script src="js/admin.js?v=20261126c"></script>
+  <script src="js/app.js?v=20261126c"></script>
 </body>
 </html>

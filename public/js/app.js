@@ -124,7 +124,18 @@ const App = (function () {
     }
   }
 
+  function toggleMobileMenu(forceState) {
+    const menu = document.getElementById('navMenuContainer');
+    const toggleBtn = document.getElementById('navMobileToggle');
+    if (!menu || !toggleBtn) return;
+    const nextOpen = typeof forceState === 'boolean' ? forceState : !menu.classList.contains('open');
+    menu.classList.toggle('open', nextOpen);
+    toggleBtn.classList.toggle('active', nextOpen);
+    toggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  }
+
   function switchView(viewName) {
+    toggleMobileMenu(false);
     const user = API.getUser();
 
     // Security check: Only HQ Administrators can access Admin Panel
@@ -1366,6 +1377,7 @@ const App = (function () {
 
   return {
     init,
+    toggleMobileMenu,
     switchView,
     loadTests,
     openAuthModal,

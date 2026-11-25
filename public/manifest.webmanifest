@@ -1,0 +1,10 @@
+{
+  "name": "Commando Batch - CAPF & Defense CBT Portal",
+  "short_name": "Commando Batch",
+  "description": "Computer Based Mock Test Platform for CRPF, CISF, BSF, ITBP, SSB, Assam Rifles & CAPF Exams",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a110e",
+  "theme_color": "#0a110e",
+  "orientation": "any"
+}

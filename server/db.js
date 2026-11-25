@@ -38,7 +38,14 @@ function saveDatabase() {
     fs.writeFileSync(tempFile, JSON.stringify(db, null, 2), 'utf8');
     fs.renameSync(tempFile, DB_FILE);
   } catch (err) {
-    console.error('Error saving database:', err);
+    // In Cloud Functions, source filesystem is read-only; fallback to /tmp
+    if (err.code === 'EROFS' || err.code === 'EACCES') {
+      try {
+        fs.writeFileSync('/tmp/database.json', JSON.stringify(db, null, 2), 'utf8');
+      } catch (e) {}
+    } else {
+      console.error('Error saving database:', err);
+    }
   }
 }
 

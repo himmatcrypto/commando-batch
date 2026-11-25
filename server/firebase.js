@@ -61,7 +61,7 @@ function initFirebase() {
   initialized = true;
 
   const serviceAccount = loadServiceAccount();
-  if (!serviceAccount) {
+  if (!serviceAccount && !process.env.K_SERVICE && !process.env.FUNCTION_TARGET) {
     return {
       connected: false,
       projectId: null,
@@ -71,14 +71,19 @@ function initFirebase() {
 
   try {
     if (!getApps().length) {
-      initializeApp({
-        credential: cert(serviceAccount),
-        projectId: serviceAccount.project_id
-      });
+      if (serviceAccount) {
+        initializeApp({
+          credential: cert(serviceAccount),
+          projectId: serviceAccount.project_id
+        });
+      } else {
+        // Inside Firebase Cloud Functions / Cloud Run, use Application Default Credentials
+        initializeApp();
+      }
     }
     firestoreDb = getAdminFirestore();
     firebaseAuth = getAdminAuth();
-    activeProjectId = serviceAccount.project_id;
+    activeProjectId = (serviceAccount && serviceAccount.project_id) || process.env.GCLOUD_PROJECT || 'studenthub-f3414';
     console.log(`🔥 Firebase Admin & Cloud Firestore connected! Project: ${activeProjectId}`);
     return { connected: true, projectId: activeProjectId };
   } catch (err) {

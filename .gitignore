@@ -6,3 +6,6 @@ Thumbs.db
 .env
 firebase-service-account.json
 config/firebase-service-account.json
+functions/node_modules/
+functions/backend/
+functions/data/

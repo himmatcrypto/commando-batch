@@ -1,20 +1,32 @@
 const http = require('http');
 
-function get(path) {
+function request(path, method = 'GET', body = null, token = null) {
   return new Promise((resolve, reject) => {
-    http.get(`http://localhost:5000${path}`, (res) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const headers = {};
+    if (payload) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = Buffer.byteLength(payload);
+    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const req = http.request({ hostname: 'localhost', port: 5000, path, method, headers }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
-          resolve({ status: res.statusCode, body: JSON.parse(data) });
+          resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(data) });
         } catch (e) {
-          resolve({ status: res.statusCode, raw: data });
+          resolve({ status: res.statusCode, headers: res.headers, raw: data });
         }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
   });
 }
+
+const get = (path, token = null) => request(path, 'GET', null, token);
 
 async function verifyAll() {
   console.log('=== VERIFYING 100-QUESTION CAPF MOCK TESTS ===\n');
@@ -50,23 +62,46 @@ async function verifyAll() {
     }
   }
 
-  // 5. Check sample test details from each force and free mocks:
-  // Must have exactly 100 questions, 100 minutes duration, and 25 questions in each section!
-  const sampleTestIds = [
-    'test_crpf_full_01',
-    'test_cisf_full_01',
-    'test_bsf_full_01',
-    'test_itbp_full_01',
-    'test_ssb_full_01',
-    'test_ar_full_01',
-    'test_free_common_01',
-    'test_free_common_02',
-    'test_free_common_03'
-  ];
+  // 5. Verify paid tests block unauthenticated access (401)
+  const unauthPaid = await get('/api/tests/test_crpf_full_01');
+  if (unauthPaid.status !== 401) {
+    throw new Error(`Security fail: unauthenticated paid test returned ${unauthPaid.status}, expected 401`);
+  }
+  console.log('\n✓ Security Check: Unauthenticated access to paid mock test blocked with HTTP 401');
+
+  // Optional admin token via env vars for paid detail check; always verify free tests publicly
+  let authToken = null;
+  if (process.env.VERIFY_EMAIL && process.env.VERIFY_PASSWORD) {
+    const loginRes = await request('/api/auth/login', 'POST', {
+      email: process.env.VERIFY_EMAIL,
+      password: process.env.VERIFY_PASSWORD,
+      requiredRole: 'admin'
+    });
+    if (loginRes.status === 200 && loginRes.body.token) {
+      authToken = loginRes.body.token;
+    }
+  }
+
+  const sampleTestIds = authToken
+    ? [
+        'test_crpf_full_01',
+        'test_cisf_full_01',
+        'test_bsf_full_01',
+        'test_itbp_full_01',
+        'test_ssb_full_01',
+        'test_ar_full_01',
+        'test_free_common_01',
+        'test_free_common_02',
+        'test_free_common_03'
+      ]
+    : ['test_free_common_01', 'test_free_common_02', 'test_free_common_03'];
 
   console.log('\nVerifying 100 questions and 25 questions per section on sample tests:');
   for (const tid of sampleTestIds) {
-    const detail = await get(`/api/tests/${tid}`);
+    const detail = await get(`/api/tests/${tid}`, authToken);
+    if (detail.status !== 200 || !detail.body.test) {
+      throw new Error(`Failed to fetch ${tid}: status ${detail.status}`);
+    }
     const t = detail.body.test;
 
     const secDist = {};

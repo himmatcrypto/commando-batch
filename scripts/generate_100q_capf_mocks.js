@@ -12,6 +12,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+  officialProfAbilityPool,
+  officialGAPool,
+  officialReasoningPool,
+  officialQuantPool,
+  officialEnglishPool
+} = require('./official_ldce_bank');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'database.json');
 
@@ -1193,8 +1200,7 @@ function getForceSection2Questions(force, mockNum) {
         'जब्ती पत्रक के साथ निकटतम कस्टम या पुलिस अधिकारियों को सौंपा जाता है।'
       )
     ];
-  } else {
-    // Assam Rifles
+  } else if (force === 'Assam Rifles') {
     forceStatutory = [
       makeQ(`ar_stat_01_m${mockNum}`, 'General Awareness & Professional Knowledge',
         'The Assam Rifles functions under a unique "Dual Control" system. Which two ministries exercise this control?',
@@ -1304,35 +1310,116 @@ function getForceSection2Questions(force, mockNum) {
     ];
   }
 
-  // Combine: 10 general GK questions + 15 force statutory questions = exactly 25 questions!
-  return [...commonGK, ...forceStatutory];
+  // Deterministic rotation helpers so every paper features official LDCE Professional Ability
+  // & varied official-pattern questions without duplicate items inside the same paper.
+  const forceSeedMap = { CRPF: 0, CISF: 7, BSF: 14, ITBP: 21, SSB: 28, 'Assam Rifles': 35, Common: 5 };
+  const fSeed = forceSeedMap[force] !== undefined ? forceSeedMap[force] : 0;
+
+  function takeCyclic(pool, count, startIdx) {
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push(pool[(startIdx + i) % pool.length]);
+    }
+    return out;
+  }
+
+  let selectedSec2 = [];
+  if (force === 'CRPF') {
+    if (mockNum === 1) {
+      // Flagship 100-Question Official CRPF SI (GD) LDCE Pattern Paper:
+      // 18 Official CRPF Professional Ability Qs + 4 Official GA Qs + 3 CRPF Act Qs = 25 Qs
+      selectedSec2 = [
+        ...takeCyclic(officialProfAbilityPool, 18, 0),
+        ...takeCyclic(officialGAPool, 4, 0),
+        ...takeCyclic(forceStatutory, 3, 0)
+      ];
+    } else {
+      // Other CRPF Mocks: 15 Official Prof Ability + 7 CRPF Statutory + 3 Official GA = 25 Qs
+      selectedSec2 = [
+        ...takeCyclic(officialProfAbilityPool, 15, (mockNum - 1) * 4),
+        ...takeCyclic(forceStatutory, 7, (mockNum - 1) * 2),
+        ...takeCyclic(officialGAPool, 3, mockNum - 1)
+      ];
+    }
+  } else if (force === 'Common') {
+    // Free Common CAPF Mocks: 15 Official Prof Ability + 5 Official GA + 5 All-CAPF Law/GK = 25 Qs
+    selectedSec2 = [
+      ...takeCyclic(officialProfAbilityPool, 15, fSeed + (mockNum - 1) * 8),
+      ...takeCyclic(officialGAPool, 5, (mockNum - 1) * 2),
+      ...takeCyclic(commonGK, 5, (mockNum - 1) * 2)
+    ];
+  } else {
+    // Force-specific Paid Mocks (CISF, BSF, ITBP, SSB, Assam Rifles):
+    // 12 Official LDCE Prof Ability + 10 Force-Specific Statutory + 3 Official/General GA = 25 Qs
+    const gaMix = [...officialGAPool, ...commonGK];
+    selectedSec2 = [
+      ...takeCyclic(officialProfAbilityPool, 12, fSeed + (mockNum - 1) * 4),
+      ...takeCyclic(forceStatutory, 10, (mockNum - 1) * 2),
+      ...takeCyclic(gaMix, 3, fSeed + (mockNum - 1) * 3)
+    ];
+  }
+
+  return selectedSec2;
 }
+
+// Balance options deterministically so correct answers span A/B/C/D (instead of all index 0),
+// while preserving fixed-order options like "All of these", "Both I and II", or "(A) ...".
+function balanceQuestionOptions(q, shift) {
+  const hasOrderSensitiveOption = q.options.some(opt =>
+    /\b(All of these|All the above|Both |Neither |\([A-D]\)|Part \([A-D]\)|No error)\b/i.test(opt) ||
+    opt.includes('उपरोक्त सभी')
+  );
+  if (hasOrderSensitiveOption || q.id.startsWith('off_') || q.correctAnswer !== 0) {
+    return q;
+  }
+  const s = ((shift % 4) + 4) % 4;
+  if (s === 0) return q;
+  // Rotate right by s so index 0 moves to index s
+  const rotated = q.options.map((_, i) => q.options[(i - s + 4) % 4]);
+  return {
+    ...q,
+    options: rotated,
+    correctAnswer: s
+  };
+}
+
+function buildSectionQuestions(combinedPool, count, seedOffset, testId, secTag) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const src = combinedPool[(seedOffset + i) % combinedPool.length];
+    const balanced = balanceQuestionOptions(src, seedOffset + i + 1);
+    out.push({
+      ...balanced,
+      id: `q_${testId}_${secTag}_${i + 1}`
+    });
+  }
+  return out;
+}
+
+const allReasoningPool = [...officialReasoningPool, ...reasoningPool]; // 45 Qs
+const allQuantPool = [...officialQuantPool, ...quantPool];             // 45 Qs
+const allEnglishPool = [...officialEnglishPool, ...englishPool];       // 45 Qs
 
 // Function to generate a complete 100-question test (25 Qs per section)
 function build100QuestionTest(testId, title, force, category, isPaid, mockNum, desc) {
-  // Section 1: Reasoning (25 questions)
-  const sec1 = reasoningPool.map((q, idx) => ({
-    ...q,
-    id: `q_${testId}_sec1_${idx + 1}`
-  }));
+  const forceSeedMap = { CRPF: 0, CISF: 6, BSF: 12, ITBP: 18, SSB: 24, 'Assam Rifles': 30, Common: 36 };
+  const fOffset = forceSeedMap[force] !== undefined ? forceSeedMap[force] : 0;
+  const rotSeed = fOffset + (mockNum - 1) * 5;
 
-  // Section 2: General Awareness & Force Special (25 questions)
+  // Section 1: General Intelligence & Reasoning (25 questions)
+  const sec1 = buildSectionQuestions(allReasoningPool, 25, rotSeed, testId, 'sec1');
+
+  // Section 2: General Awareness & Professional Knowledge (25 questions)
   const sec2 = getForceSection2Questions(force, mockNum).map((q, idx) => ({
-    ...q,
+    ...balanceQuestionOptions(q, rotSeed + idx + 2),
     id: `q_${testId}_sec2_${idx + 1}`
   }));
 
-  // Section 3: Quantitative Aptitude (25 questions)
-  const sec3 = quantPool.map((q, idx) => ({
-    ...q,
-    id: `q_${testId}_sec3_${idx + 1}`
-  }));
+  // Section 3: Quantitative / Numerical Aptitude (25 questions)
+  const sec3 = buildSectionQuestions(allQuantPool, 25, rotSeed, testId, 'sec3');
 
-  // Section 4: English & Hindi Comprehension (25 questions)
-  const sec4 = englishPool.map((q, idx) => ({
-    ...q,
-    id: `q_${testId}_sec4_${idx + 1}`
-  }));
+  // Section 4: English & Hindi Language (25 questions)
+  const sec4 = buildSectionQuestions(allEnglishPool, 25, rotSeed, testId, 'sec4');
 
   const all100Questions = [...sec1, ...sec2, ...sec3, ...sec4];
 
@@ -1375,21 +1462,21 @@ const all63Tests = [];
 
 // 1. CRPF (10 Full Tests - 100 Qs each)
 const crpfTitles = [
-  'CRPF SI (GD) Full Mock 01 - Tactical Operations & CRPF Act 1949',
-  'CRPF Head Constable (GD) Full Mock 02 - Fieldcraft & Battlecraft',
-  'CRPF CoBRA Commando Tactical Operations Mock 03 - Jungle Warfare & Anti-Naxal',
-  'CRPF ASI (Executive) Professional Mock 04 - IPC, CrPC & Service Rules',
-  'CRPF Internal Security & Anti-Riot Mock 05 - Mob Dispersal Drills',
-  'CRPF Standing Orders & Minor Acts Mock 06 - Disciplinary Law',
-  'CRPF Special Operations & VIP Security Mock 07 - Convoy Protection',
+  'CRPF SI (GD) LDCE Official Pattern 100-Q Paper 01 - Professional Ability & PYQ Blueprint',
+  'CRPF Head Constable (GD) Full Mock 02 - Fieldcraft, ARCF & Battlecraft',
+  'CRPF CoBRA Commando Tactical Operations Mock 03 - Jungle Warfare & Professional Knowledge',
+  'CRPF ASI (Executive) Professional Mock 04 - Service Rules, Forms & CrPC',
+  'CRPF Internal Security & Anti-Riot Mock 05 - Mob Dispersal & Professional Ability',
+  'CRPF Standing Orders & Minor Acts Mock 06 - Disciplinary Law & Range Drills',
+  'CRPF Special Operations & VIP Security Mock 07 - Convoy Protection & Tactics',
   'CRPF Rapid Action Force (RAF) Crowd Control Mock 08 - Non-Lethal Riot Tactics',
-  'CRPF GD to SI Speed Challenge Mock 09 - High Accuracy Speed Mock',
-  'CRPF All India Grand Championship Mock 10 - LDCE Final War Mock'
+  'CRPF GD to SI Speed Challenge Mock 09 - Official LDCE High Accuracy Mock',
+  'CRPF All India Grand Championship Mock 10 - LDCE Final Professional Ability Mock'
 ];
 crpfTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_crpf_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for CRPF personnel. Covers 4 sections (25 Qs each): Reasoning, CRPF Act 1949 & General Awareness, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CRPF SI (GD) LDCE Official Paper (4 Parts × 25 Qs = 100 Qs, 100 Min). Includes authentic Professional Ability questions (ARCF, Weapon Drills, Service Forms, Standing Orders), Reasoning, Numerical Ability & English/Hindi.`;
   all63Tests.push(build100QuestionTest(testId, title, 'CRPF', 'LDCE', true, mNum, desc));
 });
 
@@ -1409,7 +1496,7 @@ const cisfTitles = [
 cisfTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_cisf_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for CISF personnel. Covers 4 sections (25 Qs each): Reasoning, CISF Act 1968, Rules 2001 & Security GK, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CAPF SI (GD) LDCE 4-Part pattern (25 Qs each): Reasoning, Professional Ability (Official LDCE Bank + CISF Act 1968 & Rules 2001), Numerical Aptitude, and English/Hindi. Duration: 100 Minutes.`;
   all63Tests.push(build100QuestionTest(testId, title, 'CISF', 'LDCE', true, mNum, desc));
 });
 
@@ -1429,7 +1516,7 @@ const bsfTitles = [
 bsfTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_bsf_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for BSF personnel. Covers 4 sections (25 Qs each): Reasoning, BSF Act 1968 & Border Law, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CAPF SI (GD) LDCE 4-Part pattern (25 Qs each): Reasoning, Professional Ability (Official LDCE Bank + BSF Act 1968 & Border Law), Numerical Aptitude, and English/Hindi. Duration: 100 Minutes.`;
   all63Tests.push(build100QuestionTest(testId, title, 'BSF', 'LDCE', true, mNum, desc));
 });
 
@@ -1449,7 +1536,7 @@ const itbpTitles = [
 itbpTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_itbp_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for ITBP Himveers. Covers 4 sections (25 Qs each): Reasoning, ITBP Act 1992 & High-Altitude Rules, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CAPF SI (GD) LDCE 4-Part pattern (25 Qs each): Reasoning, Professional Ability (Official LDCE Bank + ITBP Act 1992 & High-Altitude Rules), Numerical Aptitude, and English/Hindi. Duration: 100 Minutes.`;
   all63Tests.push(build100QuestionTest(testId, title, 'ITBP', 'LDCE', true, mNum, desc));
 });
 
@@ -1469,7 +1556,7 @@ const ssbTitles = [
 ssbTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_ssb_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for SSB personnel. Covers 4 sections (25 Qs each): Reasoning, SSB Act 2007 & Open Border Law, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CAPF SI (GD) LDCE 4-Part pattern (25 Qs each): Reasoning, Professional Ability (Official LDCE Bank + SSB Act 2007 & Open Border Law), Numerical Aptitude, and English/Hindi. Duration: 100 Minutes.`;
   all63Tests.push(build100QuestionTest(testId, title, 'SSB', 'LDCE', true, mNum, desc));
 });
 
@@ -1489,7 +1576,7 @@ const arTitles = [
 arTitles.forEach((title, idx) => {
   const mNum = idx + 1;
   const testId = `test_ar_full_${String(mNum).padStart(2, '0')}`;
-  const desc = `Official full-length 100-question CBT mock test for Assam Rifles personnel. Covers 4 sections (25 Qs each): Reasoning, Assam Rifles Act 2006 & CI/CT Doctrine, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.`;
+  const desc = `Official 100-question CBT mock test modeled on the CAPF SI (GD) LDCE 4-Part pattern (25 Qs each): Reasoning, Professional Ability (Official LDCE Bank + Assam Rifles Act 2006 & CI/CT Doctrine), Numerical Aptitude, and English/Hindi. Duration: 100 Minutes.`;
   all63Tests.push(build100QuestionTest(testId, title, 'Assam Rifles', 'LDCE', true, mNum, desc));
 });
 
@@ -1497,8 +1584,8 @@ arTitles.forEach((title, idx) => {
 const freeTitles = [
   {
     id: 'test_free_common_01',
-    title: 'All India CAPF Common Mega Open Mock Test 01 - All Paramilitary Forces Special',
-    desc: 'Free open 100-question full-length mock test accessible to all registered defense aspirants. Exactly 25 Qs per section: Reasoning, General Awareness, Quantitative Aptitude, and English/Hindi. Duration: 100 Minutes.'
+    title: 'All India CAPF SI LDCE Official-Pattern Open Mock 01 - Professional Ability Special',
+    desc: 'Free open 100-question full-length mock test modeled on the official SI (GD) LDCE 4-Part paper: 25 Reasoning, 25 General Awareness & Official Professional Ability, 25 Numerical Ability, and 25 English/Hindi. Duration: 100 Minutes.'
   },
   {
     id: 'test_free_common_02',

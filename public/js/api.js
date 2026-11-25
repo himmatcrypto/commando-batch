@@ -209,7 +209,15 @@ const API = (function () {
 
     async resetSeedData() {
       return await request('/api/admin/seed-reset', {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify({ confirm: 'CONFIRM_RESET' })
+      });
+    },
+
+    async changePassword(currentPassword, newPassword) {
+      return await request('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword })
       });
     },
 

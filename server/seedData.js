@@ -1,8 +1,12 @@
+const crypto = require('crypto');
 const { hashPassword } = require('./auth');
 
 function getSeedData() {
-  const adminPassword = hashPassword('admin123');
-  const studentPassword = hashPassword('student123');
+  // Never seed weak predictable passwords in source code
+  const bootstrapAdminSecret = process.env.INITIAL_ADMIN_PASSWORD || crypto.randomBytes(18).toString('base64url') + '!9A';
+  const bootstrapStudentSecret = process.env.INITIAL_STUDENT_PASSWORD || crypto.randomBytes(14).toString('base64url') + '!7S';
+  const adminPassword = hashPassword(bootstrapAdminSecret);
+  const studentPassword = hashPassword(bootstrapStudentSecret);
 
   const defaultUsers = [
     {

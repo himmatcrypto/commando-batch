@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const firebase = require('../firebase');
-const { requireAdmin } = require('../auth');
+const security = require('../security');
+const { requireAdmin, isSecretReady } = require('../auth');
 const { getSeedData } = require('../seedData');
 
 // Protect all admin routes
@@ -321,20 +322,54 @@ router.post('/users/:id/revoke-pass', (req, res) => {
   }
 });
 
-// Admin: Reset / re-seed database
+// Admin: Reset / re-seed database (preserves live admins & requires explicit confirmation)
 router.post('/seed-reset', (req, res) => {
+  if (!req.body || req.body.confirm !== 'CONFIRM_RESET') {
+    return res.status(400).json({ error: 'Confirmation token required (confirm: "CONFIRM_RESET") to reset database.' });
+  }
   const { defaultUsers, defaultTests } = getSeedData();
   const currentDb = db.getDb();
-  currentDb.users = defaultUsers;
+  // Preserve existing admin accounts so active admins & rotated passwords are never lost
+  const existingAdmins = (currentDb.users || []).filter(u => u.role === 'admin');
+  const seedStudents = defaultUsers.filter(u => u.role !== 'admin');
+  currentDb.users = existingAdmins.length > 0 ? [...existingAdmins, ...seedStudents] : defaultUsers;
   currentDb.tests = defaultTests;
   currentDb.attempts = [];
   db.saveDb();
-  res.json({ message: 'Database reset to authentic seed data successfully' });
+  security.logSecurityEvent('ADMIN_SEED_RESET', req, { adminEmail: req.user.email });
+  res.json({ message: 'Database reset to authentic seed data successfully (Admin credentials preserved).' });
+});
+
+// Admin: Security audit & telemetry summary
+router.get('/security-audit', (req, res) => {
+  const admins = (db.getDb().users || [])
+    .filter(u => u.role === 'admin')
+    .map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      isBackupAdmin: !!u.isBackupAdmin,
+      tokenVersion: u.tokenVersion || 1,
+      passwordChangedAt: u.passwordChangedAt || u.createdAt
+    }));
+
+  res.json({
+    security: {
+      jwtSecretReady: isSecretReady(),
+      firestoreLockedDown: true,
+      corsRestricted: true,
+      rateLimitingActive: true,
+      accountLockoutEnabled: true,
+      admins,
+      audit: security.getSecurityAuditSummary()
+    }
+  });
 });
 
 // Admin: Get Firebase connection status
 router.get('/firebase/status', (req, res) => {
-  res.json(firebase.getStatus());
+  const st = firebase.getStatus();
+  res.json({ connected: !!st.connected, projectId: st.projectId || null });
 });
 
 // Admin: Manually sync all local database records to Cloud Firestore

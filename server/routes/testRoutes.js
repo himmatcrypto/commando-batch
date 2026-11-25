@@ -1,7 +1,50 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireAuth, verifyToken } = require('../auth');
+const security = require('../security');
+const { verifyToken } = require('../auth');
+
+function resolveAuthenticatedLiveUser(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  const decoded = verifyToken(token);
+  if (!decoded || !decoded.id) return null;
+  const liveUser = db.findUserById(decoded.id);
+  if (!liveUser || liveUser.disabled) return null;
+  if ((decoded.tokenVersion || 1) !== (liveUser.tokenVersion || 1)) return null;
+  return liveUser;
+}
+
+function hasPaidTestAccess(test, user) {
+  if (!test.isPaid) return { allowed: true };
+  if (!user) {
+    return { allowed: false, status: 401, error: 'Authentication required to access paid mock tests.' };
+  }
+  if (user.role === 'admin') return { allowed: true };
+
+  const pkg = user.activePackage;
+  const isActive = pkg && pkg.status === 'ACTIVE' && (!pkg.expiresAt || new Date(pkg.expiresAt) > new Date());
+  if (!isActive) {
+    return {
+      allowed: false,
+      status: 403,
+      error: `Active ${test.force || 'CAPF'} Tactical Pass or Commando Pro Pass required to unlock this test.`
+    };
+  }
+
+  const passForce = (pkg.targetForce || '').trim();
+  const forceMatches = passForce.toUpperCase() === 'ALL' ||
+    (test.force && passForce.toLowerCase() === test.force.trim().toLowerCase());
+  if (!forceMatches) {
+    return {
+      allowed: false,
+      status: 403,
+      error: `Your active pass covers ${passForce}. Unlock a ${test.force || 'CAPF'} pass to access this test.`
+    };
+  }
+  return { allowed: true };
+}
 
 // List mock tests (public / student)
 router.get('/', (req, res) => {
@@ -41,11 +84,18 @@ router.get('/', (req, res) => {
   res.json({ tests: summaries });
 });
 
-// Get test details for CBT examination
+// Get test details for CBT examination (strict server-side paywall & answer stripping)
 router.get('/:id', (req, res) => {
   const test = db.getTestById(req.params.id);
   if (!test) {
     return res.status(404).json({ error: 'Mock test not found' });
+  }
+
+  const liveUser = resolveAuthenticatedLiveUser(req);
+  const access = hasPaidTestAccess(test, liveUser);
+  if (!access.allowed) {
+    security.logSecurityEvent('PAID_TEST_BLOCKED', req, { testId: test.id, userId: liveUser ? liveUser.id : 'anonymous' });
+    return res.status(access.status).json({ error: access.error, requiresPass: access.status === 403, force: test.force || 'CAPF' });
   }
 
   const qCount = (test.questions || []).length;
@@ -94,16 +144,15 @@ router.post('/:id/submit', (req, res) => {
       return res.status(404).json({ error: 'Mock test not found' });
     }
 
-    // Optional auth: if token provided and valid, attach user; otherwise create guest cadet
-    let currentUser = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = verifyToken(token);
-      if (decoded) currentUser = decoded;
+    const liveUser = resolveAuthenticatedLiveUser(req);
+    const access = hasPaidTestAccess(test, liveUser);
+    if (!access.allowed) {
+      return res.status(access.status).json({ error: access.error });
     }
 
+    let currentUser = liveUser;
     if (!currentUser) {
+      // Only free common tests may fall back to a guest cadet if no token is attached
       currentUser = {
         id: 'cadet_' + Date.now(),
         name: 'Cadet Aspirant',
@@ -113,7 +162,11 @@ router.post('/:id/submit', (req, res) => {
       };
     }
 
-    const { answers = {}, timeSpentSeconds = 0, questionStatuses = {} } = req.body;
+    const rawBody = req.body || {};
+    const answers = (rawBody.answers && typeof rawBody.answers === 'object') ? rawBody.answers : {};
+    const maxSec = (Number(test.durationMinutes) || 120) * 60;
+    const timeSpentSeconds = Math.max(0, Math.min(maxSec, Math.round(Number(rawBody.timeSpentSeconds) || 0)));
+    const questionStatuses = (rawBody.questionStatuses && typeof rawBody.questionStatuses === 'object') ? rawBody.questionStatuses : {};
     const questions = test.questions || [];
 
     const marksPerQ = Number(test.marksPerQuestion) || 1;

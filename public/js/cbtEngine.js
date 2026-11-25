@@ -101,7 +101,13 @@ const CBTEngine = (function () {
       playBeep(440, 0.1);
     } catch (err) {
       console.error('Failed to start test:', err);
-      App.showToast(err.message || 'Error launching examination', 'error');
+      const msg = (err && err.message) ? err.message : 'Error launching examination';
+      if (msg.toLowerCase().includes('pass') || msg.toLowerCase().includes('unlock')) {
+        App.showToast(msg, 'warning');
+        App.openPackageEnrollment('pkg_100_2m', 'CRPF');
+      } else {
+        App.showToast(msg, 'error');
+      }
     }
   }
 

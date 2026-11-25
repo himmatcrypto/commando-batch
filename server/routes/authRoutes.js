@@ -1,10 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { hashPassword, comparePassword, generateToken, requireAuth } = require('../auth');
+const security = require('../security');
+const {
+  hashPassword,
+  comparePassword,
+  DUMMY_HASH,
+  generateToken,
+  requireAuth
+} = require('../auth');
 
-// Register a new student
-router.post('/register', (req, res) => {
+// Register a new student (with strict rate limiting, validation & strong password policy)
+router.post('/register', security.authRegisterLimiter, (req, res) => {
   try {
     const { name, email, password, targetExam, force, phone } = req.body;
 
@@ -12,30 +19,53 @@ router.post('/register', (req, res) => {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
-    const existing = db.findUserByEmail(email);
-    if (existing) {
-      return res.status(400).json({ error: 'An account with this email already exists' });
+    const cleanName = String(name).trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    if (cleanName.length < 2 || cleanName.length > 80) {
+      return res.status(400).json({ error: 'Name must be between 2 and 80 characters' });
     }
 
+    if (!security.isValidEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please provide a valid email address' });
+    }
+
+    const pwError = security.validatePasswordStrength(password, false);
+    if (pwError) {
+      return res.status(400).json({ error: pwError });
+    }
+
+    const existing = db.findUserByEmail(cleanEmail);
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const cleanTargetExam = String(targetExam || 'LDCE').trim().slice(0, 40);
+    const cleanForce = String(force || 'Paramilitary Forces').trim().slice(0, 60);
+    const cleanPhone = String(phone || '').replace(/[^\d+\-\s]/g, '').trim().slice(0, 18);
+
     const rollRandom = Math.floor(1000 + Math.random() * 9000);
-    const prefix = targetExam ? targetExam.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) : 'CB';
+    const prefix = cleanTargetExam.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'CB';
     const rollNo = `${prefix}-${new Date().getFullYear()}-${rollRandom}`;
 
     const newUser = {
-      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
+      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name: cleanName,
+      email: cleanEmail,
       password: hashPassword(password),
       role: 'student',
-      targetExam: targetExam || 'LDCE',
-      force: force || 'Paramilitary Forces',
-      phone: phone || '',
+      tokenVersion: 1,
+      disabled: false,
+      targetExam: cleanTargetExam,
+      force: cleanForce,
+      phone: cleanPhone,
       rollNo,
       createdAt: new Date().toISOString()
     };
 
     db.createUser(newUser);
     const token = generateToken(newUser);
+    security.logSecurityEvent('USER_REGISTERED', req, { email: cleanEmail, role: 'student' });
 
     res.status(201).json({
       message: 'Registration successful! Welcome to Commando Batch.',
@@ -57,33 +87,66 @@ router.post('/register', (req, res) => {
   }
 });
 
-// Login (Student or Admin)
-router.post('/login', (req, res) => {
+// Login (Student or Admin) with IP rate limiting, account lockout & timing-safe check
+router.post('/login', security.authLoginLimiter, (req, res) => {
   try {
     const { email, password, requiredRole } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = db.findUserByEmail(email);
+    const cleanEmail = email.trim().toLowerCase();
+    const lockState = security.checkAccountLock(cleanEmail);
+    if (lockState.locked) {
+      security.logSecurityEvent('LOGIN_BLOCKED_LOCKOUT', req, { email: cleanEmail });
+      return res.status(429).json({ error: lockState.message });
+    }
+
+    const user = db.findUserByEmail(cleanEmail);
     if (!user) {
+      // Dummy bcrypt comparison to eliminate user-enumeration timing leaks
+      comparePassword(password, DUMMY_HASH);
+      security.recordFailedLogin(cleanEmail);
+      security.logSecurityEvent('LOGIN_FAIL_UNKNOWN_EMAIL', req, { email: cleanEmail });
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (user.disabled) {
+      security.logSecurityEvent('LOGIN_DISABLED_ACCOUNT', req, { email: cleanEmail });
+      return res.status(403).json({ error: 'This account has been suspended. Contact HQ Admin.' });
     }
 
     const match = comparePassword(password, user.password);
     if (!match) {
+      const failState = security.recordFailedLogin(cleanEmail);
+      security.logSecurityEvent('LOGIN_FAIL_BAD_PASSWORD', req, {
+        email: cleanEmail,
+        role: user.role,
+        attempts: failState.count
+      });
+      if (failState.lockedUntil) {
+        return res.status(429).json({
+          error: 'Too many failed login attempts. Account locked for 15 minutes.'
+        });
+      }
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     // Role-restriction check: If logging in through Admin Portal, strictly verify user has 'admin' role
     if (requiredRole === 'admin' && user.role !== 'admin') {
+      security.logSecurityEvent('ADMIN_PORTAL_DENIED', req, { email: cleanEmail });
       return res.status(403).json({
         error: 'ACCESS DENIED: This portal is strictly restricted to HQ Administrators. Regular candidates must use Candidate Login.'
       });
     }
 
+    security.clearFailedLogins(cleanEmail);
     const token = generateToken(user);
+
+    if (user.role === 'admin') {
+      security.logSecurityEvent('ADMIN_LOGIN_SUCCESS', req, { email: cleanEmail, userId: user.id });
+    }
 
     res.json({
       message: 'Login successful',
@@ -102,6 +165,49 @@ router.post('/login', (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// Change own password (rotates tokenVersion to revoke all previously issued tokens)
+router.post('/change-password', requireAuth, (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    const user = db.findUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!comparePassword(currentPassword, user.password)) {
+      security.logSecurityEvent('PASSWORD_CHANGE_FAIL', req, { userId: user.id });
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const pwError = security.validatePasswordStrength(newPassword, user.role === 'admin');
+    if (pwError) {
+      return res.status(400).json({ error: pwError });
+    }
+
+    const newVersion = (user.tokenVersion || 1) + 1;
+    const updatedUser = db.updateUser(user.id, {
+      password: hashPassword(newPassword),
+      tokenVersion: newVersion,
+      passwordChangedAt: new Date().toISOString()
+    });
+
+    security.logSecurityEvent('PASSWORD_ROTATED', req, { userId: user.id, email: user.email });
+    const token = generateToken(updatedUser);
+
+    res.json({
+      message: 'Password changed successfully. All prior sessions have been revoked.',
+      token
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
@@ -138,14 +244,19 @@ router.get('/me', requireAuth, (req, res) => {
 router.post('/subscribe-package', requireAuth, (req, res) => {
   try {
     const { packageId, targetForce, durationMonths } = req.body;
+    const allowedForces = new Set(['CRPF', 'CISF', 'BSF', 'ITBP', 'SSB', 'ASSAM RIFLES', 'ALL']);
+    const rawForce = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'CRPF';
+    const forceUpper = rawForce.toUpperCase();
+    if (!allowedForces.has(forceUpper)) {
+      return res.status(400).json({ error: 'Invalid target force specified for pass.' });
+    }
+
+    const forceName = forceUpper === 'ASSAM RIFLES' ? 'Assam Rifles' : (forceUpper === 'ALL' ? 'ALL' : forceUpper);
+    const isAllForces = forceName === 'ALL';
+    const is6Months = packageId === 'pkg_199_6m' || packageId === 'pkg_all_6m' || Number(durationMonths) === 6;
+
     let pkgDetails = null;
-    const forceName = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'CRPF';
-    const isAllForces = forceName.toUpperCase() === 'ALL';
-
-    const is6Months = packageId === 'pkg_199_6m' || packageId === 'pkg_all_6m' || durationMonths === 6;
-
     if (is6Months) {
-      // 6 Months Plan: Single Force = ₹199, All Forces Mocks = ₹550
       const price = isAllForces ? 550 : 199;
       const testsCount = isAllForces ? 60 : 10;
       const name = isAllForces
@@ -166,7 +277,6 @@ router.post('/subscribe-package', requireAuth, (req, res) => {
         transactionId: 'TXN-CB-' + Math.floor(100000 + Math.random() * 900000)
       };
     } else {
-      // 2 Months Plan: Single Force = ₹100, All Forces Mocks = ₹300
       const price = isAllForces ? 300 : 100;
       const testsCount = isAllForces ? 60 : 10;
       const name = isAllForces
@@ -197,6 +307,7 @@ router.post('/subscribe-package', requireAuth, (req, res) => {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
+        role: updatedUser.role,
         targetExam: updatedUser.targetExam,
         force: updatedUser.force,
         rollNo: updatedUser.rollNo,

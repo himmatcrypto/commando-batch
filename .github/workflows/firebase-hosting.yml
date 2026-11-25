@@ -1,21 +1,46 @@
-name: Deploy to Firebase Hosting on push
+name: Auto Sync Firestore & Deploy Firebase on Push
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  build_and_deploy:
+  sync_and_deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STUDENTHUB_F3414 }}
-          channelId: live
-          projectId: studenthub-f3414
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install backend & Cloud Functions dependencies
+        run: |
+          npm ci --omit=dev
+          cd functions && npm install --omit=dev
+
+      - name: Prepare Cloud Functions bundle
+        run: node scripts/prepare_functions.js
+
+      - name: Sync mock tests to Cloud Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STUDENTHUB_F3414 }}
+        run: node scripts/sync_tests_firestore.js
+
+      - name: Deploy Firestore Rules, Cloud Functions & Firebase Hosting
+        env:
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STUDENTHUB_F3414 }}
+        run: |
+          printf '%s' "$FIREBASE_SA_JSON" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx --yes firebase-tools deploy \
+            --only firestore:rules,functions,hosting \
+            --project studenthub-f3414 \
+            --force \
+            --non-interactive
+          rm -f "$RUNNER_TEMP/firebase-sa.json"

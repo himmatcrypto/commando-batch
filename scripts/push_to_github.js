@@ -1,6 +1,8 @@
 /**
- * Script to push the Commando Batch project to GitHub
- * Usage: node scripts/push_to_github.js <REPO_URL> <GITHUB_TOKEN_OR_PAT>
+ * Push Commando Batch project to GitHub (main branch).
+ * Usage:
+ *   node scripts/push_to_github.js [<REPO_URL>] [<GITHUB_TOKEN>]
+ * Reads token from arg -> process.env.GITHUB_TOKEN -> gitignored config/.github_token
  */
 
 const fs = require('fs');
@@ -9,48 +11,50 @@ const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
 
 const dir = path.join(__dirname, '..');
+const DEFAULT_REPO = 'https://github.com/himmatcrypto/commando-batch.git';
+
+function loadToken(argToken) {
+  if (argToken) return argToken.trim();
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN.trim();
+  const tokFile = path.join(dir, 'config', '.github_token');
+  if (fs.existsSync(tokFile)) {
+    return fs.readFileSync(tokFile, 'utf8').trim();
+  }
+  return '';
+}
 
 async function pushToGithub() {
   const args = process.argv.slice(2);
-  const repoUrl = args[0] || process.env.GITHUB_REPO_URL;
-  const token = args[1] || process.env.GITHUB_TOKEN;
+  const repoUrl = args[0] || process.env.GITHUB_REPO_URL || DEFAULT_REPO;
+  const token = loadToken(args[1]);
 
-  if (!repoUrl) {
-    console.error('Error: Please provide your GitHub repository URL.');
-    console.log('Example: node scripts/push_to_github.js https://github.com/username/commando-batch.git <TOKEN>');
+  if (!token) {
+    console.error('Error: GitHub token required (pass arg, GITHUB_TOKEN env, or config/.github_token).');
     process.exit(1);
   }
 
-  console.log(`Setting remote origin: ${repoUrl}`);
+  // Ensure origin remote matches repoUrl cleanly without embedding secrets in .git/config
+  const remotes = await git.listRemotes({ fs, dir });
+  const existing = remotes.find(r => r.remote === 'origin');
+  if (!existing || existing.url !== repoUrl) {
+    if (existing) await git.deleteRemote({ fs, dir, remote: 'origin' });
+    await git.addRemote({ fs, dir, remote: 'origin', url: repoUrl });
+  }
 
-  // Set remote origin
-  try {
-    const remotes = await git.listRemotes({ fs, dir });
-    if (remotes.find(r => r.remote === 'origin')) {
-      await git.deleteRemote({ fs, dir, remote: 'origin' });
-    }
-  } catch (e) {}
-
-  await git.addRemote({ fs, dir, remote: 'origin', url: repoUrl });
-
-  console.log('Pushing to GitHub (main branch)...');
-
+  console.log(`Pushing main branch to ${repoUrl}...`);
   const pushResult = await git.push({
     fs,
     http,
     dir,
     remote: 'origin',
     ref: 'main',
-    force: true,
-    onAuth: () => {
-      return {
-        username: token || 'git',
-        password: token || ''
-      };
-    }
+    onAuth: () => ({
+      username: token,
+      password: token
+    })
   });
 
-  console.log('Push completed successfully!', pushResult);
+  console.log('Push completed successfully!', JSON.stringify(pushResult));
 }
 
 pushToGithub().catch(err => {

@@ -4,9 +4,11 @@ node_modules/
 .DS_Store
 Thumbs.db
 .env
+.env.*
 firebase-service-account.json
 config/firebase-service-account.json
 config/.jwt_secret
+config/.github_token
 functions/node_modules/
 functions/backend/
 functions/config/

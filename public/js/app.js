@@ -9,31 +9,33 @@ const App = (function () {
   let authCallback = null;
 
   async function init() {
-    setupEventListeners();
-    updateAuthUI();
+    try { setupEventListeners(); } catch (e) { console.warn('setupEventListeners error:', e); }
+    try { updateAuthUI(); } catch (e) { console.warn('updateAuthUI error:', e); }
 
     // Initialize CBT engine
-    CBTEngine.init();
+    try {
+      if (typeof CBTEngine !== 'undefined' && CBTEngine.init) CBTEngine.init();
+    } catch (e) { console.warn('CBTEngine.init error:', e); }
 
-    // Initialize Three.js 3D Emblem
-    if (window.initThreeBadge) {
-      window.initThreeBadge();
-    }
+    // Initialize Three.js 3D Emblem (non-blocking if WebGL unavailable)
+    try {
+      if (window.initThreeBadge) window.initThreeBadge();
+    } catch (e) { console.warn('initThreeBadge error:', e); }
 
     // Initialize CAPF Combat Background Slideshow
-    initCombatSlider();
+    try { initCombatSlider(); } catch (e) { console.warn('initCombatSlider error:', e); }
 
     // Load initial mock tests
     await loadTests('all');
 
     // Enable 3D tilt effects
-    setup3DTilt();
+    try { setup3DTilt(); } catch (e) { console.warn('setup3DTilt error:', e); }
 
     // Check for paused CBT examination session
-    checkPausedSession();
+    try { checkPausedSession(); } catch (e) { console.warn('checkPausedSession error:', e); }
 
     // Update packages status for active pass
-    updatePackagesUI();
+    try { updatePackagesUI(); } catch (e) { console.warn('updatePackagesUI error:', e); }
   }
 
   function setupEventListeners() {
@@ -185,14 +187,25 @@ const App = (function () {
     `;
 
     try {
-      const data = await API.getTests(category);
-      allTests = data.tests;
+      let data = null;
+      let lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          data = await API.getTests(category);
+          break;
+        } catch (e) {
+          lastErr = e;
+          await new Promise(r => setTimeout(r, 1200));
+        }
+      }
+      if (!data) throw lastErr || new Error('Unable to fetch tests');
+      allTests = data.tests || [];
       renderTestCards(allTests);
     } catch (err) {
       console.error('Failed to load tests:', err);
       grid.innerHTML = `
         <div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: #ef4444;">
-          Failed to load mock tests. Please check connection.
+          Failed to load mock tests. <button class="btn-demo-pill" onclick="App.loadTests('${escapeHtml(category)}')" style="margin-left: 0.5rem;">↻ Retry</button>
         </div>
       `;
     }

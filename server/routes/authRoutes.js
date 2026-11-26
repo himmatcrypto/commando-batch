@@ -125,52 +125,9 @@ function findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits) {
   };
 }
 
-let cachedEmailCfg = null;
-let cachedEmailCfgAt = 0;
-
-function clearEmailConfigCache() {
-  cachedEmailCfg = null;
-  cachedEmailCfgAt = 0;
-}
-
-async function getEmailConfig(forceRefresh = false) {
-  if (!forceRefresh && cachedEmailCfg && (Date.now() - cachedEmailCfgAt < 60000)) {
-    return cachedEmailCfg;
-  }
-
-  const dbEmailCfg = (db.getDb().settings && db.getDb().settings.email) || {};
-  let fsCfg = {};
-  try {
-    if (firebase.isConnected()) {
-      const snap = await firebase.getFirestore().collection('settings').doc('email').get();
-      if (snap.exists && snap.data()) {
-        fsCfg = snap.data();
-      }
-    }
-  } catch (e) {
-    console.warn('Email config Firestore read warning:', e.message);
-  }
-
-  const resendApiKey = process.env.RESEND_API_KEY || fsCfg.resendApiKey || dbEmailCfg.resendApiKey || '';
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER || fsCfg.user || dbEmailCfg.user || '';
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || fsCfg.pass || dbEmailCfg.pass || '';
-  const host = process.env.SMTP_HOST || fsCfg.host || dbEmailCfg.host || (user ? 'smtp.gmail.com' : '');
-  const port = Number(process.env.SMTP_PORT || fsCfg.port || dbEmailCfg.port || 587);
-  const from = process.env.SMTP_FROM || process.env.EMAIL_FROM || fsCfg.from || dbEmailCfg.from || (user ? `"Commando Batch" <${user}>` : '');
-
-  const cfg = resendApiKey
-    ? { configured: true, provider: 'resend', resendApiKey, from: from || 'Commando Batch <onboarding@resend.dev>' }
-    : (host && user && pass)
-      ? { configured: true, provider: host.includes('gmail') ? 'gmail' : 'smtp', host, port, user, pass, from }
-      : { configured: false, provider: 'gmail', host: 'smtp.gmail.com', port: 587, user: '', from: '' };
-
-  cachedEmailCfg = cfg;
-  cachedEmailCfgAt = Date.now();
-  return cfg;
-}
-
 async function sendRegistrationOtpEmail(toEmail, otp) {
-  const cfg = await getEmailConfig();
+  const dbEmailCfg = (db.getDb().settings && db.getDb().settings.email) || {};
+  const resendApiKey = process.env.RESEND_API_KEY || dbEmailCfg.resendApiKey;
   const subject = `Commando Batch - Email Verification Code: ${otp}`;
   const textBody = `Your 6-digit verification code for Commando Batch candidate registration is ${otp}. This code is valid for 10 minutes. Do not share this code with anyone.`;
   const htmlBody = `
@@ -184,20 +141,15 @@ async function sendRegistrationOtpEmail(toEmail, otp) {
     </div>
   `;
 
-  if (!cfg.configured) {
-    const err = new Error('Email OTP service is not configured yet. Admin: open Admin Panel → Email OTP Setup to connect Gmail / SMTP / Resend.');
-    err.statusCode = 503;
-    throw err;
-  }
-
-  if (cfg.provider === 'resend') {
+  if (resendApiKey) {
+    const fromAddr = process.env.EMAIL_FROM || dbEmailCfg.from || 'Commando Batch <onboarding@resend.dev>';
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${cfg.resendApiKey}`,
+        'Authorization': `Bearer ${resendApiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ from: cfg.from, to: [toEmail], subject, html: htmlBody, text: textBody })
+      body: JSON.stringify({ from: fromAddr, to: [toEmail], subject, html: htmlBody, text: textBody })
     });
     if (!r.ok) {
       const errText = await r.text().catch(() => '');
@@ -208,15 +160,27 @@ async function sendRegistrationOtpEmail(toEmail, otp) {
     return 'RESEND';
   }
 
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || dbEmailCfg.user;
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || dbEmailCfg.pass;
+  const smtpHost = process.env.SMTP_HOST || dbEmailCfg.host || (smtpUser ? 'smtp.gmail.com' : '');
+  const smtpPort = Number(process.env.SMTP_PORT || dbEmailCfg.port || 587);
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    const err = new Error('Email OTP service is not configured yet. Please configure GMAIL_USER & GMAIL_APP_PASSWORD (or SMTP_* / RESEND_API_KEY) on the server.');
+    err.statusCode = 503;
+    throw err;
+  }
+
   const transporter = nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.port === 465,
-    auth: { user: cfg.user, pass: cfg.pass }
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass }
   });
 
+  const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_FROM || dbEmailCfg.from || `"Commando Batch" <${smtpUser}>`;
   await transporter.sendMail({
-    from: cfg.from || `"Commando Batch" <${cfg.user}>`,
+    from: fromAddr,
     to: toEmail,
     subject,
     text: textBody,
@@ -934,8 +898,5 @@ router.post('/subscribe-package', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to activate mock test package' });
   }
 });
-
-router.getEmailConfig = getEmailConfig;
-router.clearEmailConfigCache = clearEmailConfigCache;
 
 module.exports = router;

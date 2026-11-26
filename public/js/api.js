@@ -252,17 +252,6 @@ const API = (function () {
       });
     },
 
-    async getAdminEmailConfig() {
-      return await request('/api/admin/email-config');
-    },
-
-    async saveAdminEmailConfig(payload) {
-      return await request('/api/admin/email-config', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-    },
-
     // Tests & CBT
     async getTests(category) {
       const q = category && category !== 'all' ? `?category=${category}` : '';

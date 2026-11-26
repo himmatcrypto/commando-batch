@@ -74,9 +74,6 @@ const Admin = (function () {
           <button class="btn-demo-pill" style="border-color: #38bdf8; color: #38bdf8; font-weight: 700;" onclick="Admin.openCashfreeConfigModal()">
             💳 Cashfree Setup
           </button>
-          <button class="btn-demo-pill" style="border-color: #4ade80; color: #4ade80; font-weight: 700;" onclick="Admin.openEmailConfigModal()">
-            📧 Email OTP Setup
-          </button>
           <button class="btn-demo-pill" style="border-color: #f59e0b; color: #fbbf24; font-weight: 700;" onclick="Admin.syncFirebase()">
             🔥 Sync to Firestore
           </button>
@@ -1449,118 +1446,10 @@ const Admin = (function () {
     }
   }
 
-  async function openEmailConfigModal() {
-    try {
-      const cfg = await API.getAdminEmailConfig();
-      const html = `
-        <div style="margin-bottom: 1.25rem;">
-          <h2 style="color: #fff; font-size: 1.4rem;">📧 Registration Email OTP Setup</h2>
-          <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem;">
-            Credentials are verified live and stored server-side in locked Cloud Firestore (<code>settings/email</code>).
-          </p>
-        </div>
-
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid ${cfg.configured ? '#22c55e' : '#f59e0b'}; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.15rem; font-size: 0.85rem;">
-          <div>Status: <strong style="color: ${cfg.configured ? '#4ade80' : '#fbbf24'};">${cfg.configured ? '🟢 ACTIVE (' + escapeHtml(String(cfg.provider || 'gmail').toUpperCase()) + ')' : '🟡 NOT CONFIGURED'}</strong></div>
-          ${cfg.userMasked ? `<div style="color:#cbd5e1; margin-top:0.2rem;">Sender: <code>${escapeHtml(cfg.userMasked)}</code></div>` : ''}
-          <div style="color:#94a3b8; font-size:0.78rem; margin-top:0.35rem;">
-            Gmail Tip: Turn on 2-Step Verification on your Gmail and create a 16-letter App Password at <strong>myaccount.google.com/apppasswords</strong>.
-          </div>
-        </div>
-
-        <form onsubmit="Admin.saveEmailConfig(event)">
-          <div class="form-group">
-            <label class="form-label">Email Provider</label>
-            <select id="emailProviderSelect" class="form-select" onchange="Admin.toggleEmailProviderFields()">
-              <option value="gmail" ${cfg.provider === 'gmail' ? 'selected' : ''}>Gmail (App Password — Recommended)</option>
-              <option value="smtp" ${cfg.provider === 'smtp' ? 'selected' : ''}>Custom SMTP Server</option>
-              <option value="resend" ${cfg.provider === 'resend' ? 'selected' : ''}>Resend API</option>
-            </select>
-          </div>
-          <div id="emailSmtpFields" style="display: ${cfg.provider === 'resend' ? 'none' : 'block'};">
-            <div class="form-group">
-              <label class="form-label">Sender Email / Username</label>
-              <input type="email" id="emailUserInput" class="form-input" placeholder="e.g. commandobatch.official@gmail.com">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Gmail App Password / SMTP Password</label>
-              <input type="password" id="emailPassInput" class="form-input" placeholder="16-character App Password (spaces ok)">
-            </div>
-            <div id="emailCustomSmtpRow" style="display: ${cfg.provider === 'smtp' ? 'grid' : 'none'}; grid-template-columns: 2fr 1fr; gap: 0.75rem;">
-              <div class="form-group">
-                <label class="form-label">SMTP Host</label>
-                <input type="text" id="emailHostInput" class="form-input" value="${escapeHtml(cfg.host || 'smtp.gmail.com')}">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Port</label>
-                <input type="number" id="emailPortInput" class="form-input" value="${Number(cfg.port || 587)}">
-              </div>
-            </div>
-          </div>
-          <div id="emailResendFields" style="display: ${cfg.provider === 'resend' ? 'block' : 'none'};">
-            <div class="form-group">
-              <label class="form-label">Resend API Key</label>
-              <input type="password" id="emailResendKeyInput" class="form-input" placeholder="re_...">
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">From Name / Address (Optional)</label>
-            <input type="text" id="emailFromInput" class="form-input" placeholder="Commando Batch <you@gmail.com>" value="${escapeHtml(cfg.from || '')}">
-          </div>
-          <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
-            <button type="button" class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
-            <button type="submit" class="btn-3d btn-3d-success" style="flex: 2;">✓ Verify & Save Email Setup</button>
-          </div>
-        </form>
-      `;
-      App.openGeneralModal(html);
-    } catch (err) {
-      App.showToast(err.message || 'Unable to load Email OTP config.', 'error');
-    }
-  }
-
-  function toggleEmailProviderFields() {
-    const provider = document.getElementById('emailProviderSelect')?.value || 'gmail';
-    const smtpFields = document.getElementById('emailSmtpFields');
-    const customRow = document.getElementById('emailCustomSmtpRow');
-    const resendFields = document.getElementById('emailResendFields');
-    if (smtpFields) smtpFields.style.display = provider === 'resend' ? 'none' : 'block';
-    if (customRow) customRow.style.display = provider === 'smtp' ? 'grid' : 'none';
-    if (resendFields) resendFields.style.display = provider === 'resend' ? 'block' : 'none';
-  }
-
-  async function saveEmailConfig(e) {
-    e.preventDefault();
-    const provider = document.getElementById('emailProviderSelect').value;
-    const payload = {
-      provider,
-      from: document.getElementById('emailFromInput').value.trim()
-    };
-    if (provider === 'resend') {
-      payload.resendApiKey = document.getElementById('emailResendKeyInput').value.trim();
-    } else {
-      payload.user = document.getElementById('emailUserInput').value.trim();
-      payload.pass = document.getElementById('emailPassInput').value.trim();
-      payload.host = document.getElementById('emailHostInput').value.trim();
-      payload.port = Number(document.getElementById('emailPortInput').value || 587);
-    }
-    try {
-      App.showToast('Verifying SMTP credentials & saving...', 'info');
-      const res = await API.saveAdminEmailConfig(payload);
-      App.closeGeneralModal();
-      App.showToast(res.message || 'Email OTP setup saved!', 'success');
-    } catch (err) {
-      App.showToast(err.message || 'Failed to verify Email OTP settings.', 'error');
-    }
-  }
-
   return {
     loadAdminDashboard,
     openCashfreeConfigModal,
     saveCashfreeConfig,
-    openEmailConfigModal,
-    toggleEmailProviderFields,
-    saveEmailConfig,
     switchAdminTab,
     openCreateTestModal,
     addQuestionForm,

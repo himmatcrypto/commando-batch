@@ -35,9 +35,32 @@ const API = (function () {
     }
   }
 
+  function getDeviceId() {
+    let devId = localStorage.getItem('commando_device_id');
+    if (!devId) {
+      devId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? 'dev_' + crypto.randomUUID().replace(/-/g, '').slice(0, 20)
+        : 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('commando_device_id', devId);
+    }
+    return devId;
+  }
+
+  function getDeviceLabel() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|Tablet/i.test(ua)) return 'Tablet / iPad';
+    if (/iPhone/i.test(ua)) return 'iPhone (iOS)';
+    if (/Android/i.test(ua)) return /Mobile/i.test(ua) ? 'Android Phone' : 'Android Tablet';
+    if (/Windows/i.test(ua)) return 'Windows PC';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Mac PC';
+    if (/Linux/i.test(ua)) return 'Linux PC';
+    return 'Web Device';
+  }
+
   async function request(endpoint, options = {}) {
     const headers = {
       'Content-Type': 'application/json',
+      'X-Device-Id': getDeviceId(),
       ...options.headers
     };
 
@@ -53,6 +76,14 @@ const API = (function () {
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401 && data && data.code === 'SESSION_REPLACED') {
+        setToken(null);
+        setUser(null);
+        if (typeof App !== 'undefined' && App.handleForcedDeviceLogout) {
+          App.handleForcedDeviceLogout(data.error);
+        }
+      }
 
       if (!res.ok) {
         const apiErr = new Error(data.error || `HTTP error ${res.status}`);
@@ -76,7 +107,12 @@ const API = (function () {
 
     // Auth
     async login(email, password, requiredRole = null) {
-      const payload = { email, password };
+      const payload = {
+        email,
+        password,
+        deviceId: getDeviceId(),
+        deviceLabel: getDeviceLabel()
+      };
       if (requiredRole) payload.requiredRole = requiredRole;
       const res = await request('/api/auth/login', {
         method: 'POST',
@@ -90,7 +126,11 @@ const API = (function () {
     async register(data) {
       const res = await request('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          ...data,
+          deviceId: getDeviceId(),
+          deviceLabel: getDeviceLabel()
+        })
       });
       setToken(res.token);
       setUser(res.user);
@@ -100,7 +140,13 @@ const API = (function () {
     async googleAuth(idToken, targetExam = null, force = null) {
       const res = await request('/api/auth/google', {
         method: 'POST',
-        body: JSON.stringify({ idToken, targetExam, force })
+        body: JSON.stringify({
+          idToken,
+          targetExam,
+          force,
+          deviceId: getDeviceId(),
+          deviceLabel: getDeviceLabel()
+        })
       });
       setToken(res.token);
       setUser(res.user);
@@ -122,6 +168,16 @@ const API = (function () {
     },
 
     logout() {
+      const tok = getToken();
+      if (tok) {
+        fetch(`${BASE_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tok}`,
+            'X-Device-Id': getDeviceId()
+          }
+        }).catch(() => {});
+      }
       setToken(null);
       setUser(null);
     },

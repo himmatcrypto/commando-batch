@@ -679,6 +679,10 @@ const App = (function () {
       } else {
         switchView('studentView');
       }
+
+      if (res.securityWarning) {
+        showSecurityWarningModal(res.securityWarning);
+      }
     } catch (err) {
       showToast(err.message || 'Login failed. Check email/password.', 'error');
     }
@@ -735,6 +739,10 @@ const App = (function () {
         authCallback = null;
       } else {
         switchView('studentView');
+      }
+
+      if (res.securityWarning) {
+        showSecurityWarningModal(res.securityWarning);
       }
     } catch (err) {
       if (err.data && err.data.alreadyRegistered && dupAlert) {
@@ -867,6 +875,36 @@ const App = (function () {
     } else {
       switchView('studentView');
     }
+
+    if (res.securityWarning) {
+      showSecurityWarningModal(res.securityWarning);
+    }
+  }
+
+  function showSecurityWarningModal(warning) {
+    if (!warning || !warning.message) return;
+    const isMulti = warning.type === 'MULTIPLE_ACCOUNTS_WARNING';
+    showToast(warning.message, isMulti ? 'error' : 'warning');
+    openGeneralModal(`
+      <div style="text-align: center; padding: 0.5rem 0;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">${isMulti ? '🚨' : '📱'}</div>
+        <h2 style="color: ${isMulti ? '#ef4444' : '#fbbf24'}; font-size: 1.35rem; margin-bottom: 0.6rem;">
+          ${escapeHtml(warning.title || 'Security Notice')}
+        </h2>
+        <p style="color: #e2e8f0; font-size: 0.92rem; line-height: 1.6; background: ${isMulti ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'}; border: 1px solid ${isMulti ? '#ef4444' : '#f59e0b'}; border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+          ${escapeHtml(warning.message)}
+        </p>
+        <button class="btn-3d" style="width: 100%;" onclick="App.closeGeneralModal()">
+          Understood &amp; Acknowledge
+        </button>
+      </div>
+    `);
+  }
+
+  function handleForcedDeviceLogout(message) {
+    updateAuthUI();
+    switchView('homeView');
+    showToast(message || 'Logged out: Only 1 device is allowed at a time.', 'error');
   }
 
   function handleLogout() {
@@ -1606,6 +1644,7 @@ const App = (function () {
     handleResetPassword,
     handleGoogleAuth,
     handleLogout,
+    handleForcedDeviceLogout,
     openGeneralModal,
     closeGeneralModal,
     showToast,

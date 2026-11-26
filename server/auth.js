@@ -85,7 +85,7 @@ function comparePassword(password, hash) {
 // Constant-time mitigation dummy hash for non-existent user checks
 const DUMMY_HASH = '$2b$12$C6UzMDM.H6dfI/f/IKxGhu6p6D1i7nL7V1T6Y9H8bV5oR9Q0b3WFe';
 
-function generateToken(user) {
+function generateToken(user, sessionId = null, deviceId = null) {
   return jwt.sign(
     {
       id: user.id,
@@ -94,7 +94,9 @@ function generateToken(user) {
       role: user.role || 'student',
       targetExam: user.targetExam || 'LDCE',
       rollNo: user.rollNo || '',
-      tokenVersion: user.tokenVersion || 1
+      tokenVersion: user.tokenVersion || 1,
+      sessionId: sessionId || user.activeSessionId || null,
+      deviceId: deviceId || user.activeDeviceId || null
     },
     getJwtSecret(),
     {
@@ -142,6 +144,23 @@ function requireAuth(req, res, next) {
   const liveTokenVersion = liveUser.tokenVersion || 1;
   if ((decoded.tokenVersion || 1) !== liveTokenVersion) {
     return res.status(401).json({ error: 'Session revoked after password change. Please log in again.' });
+  }
+
+  // Enforce One Device At a Time for candidates: if candidate logged in on another PC/Phone/Tablet,
+  // previous device's sessionId no longer matches activeSessionId and is immediately logged out.
+  if (liveUser.role !== 'admin' && liveUser.activeSessionId && decoded.sessionId !== liveUser.activeSessionId) {
+    return res.status(401).json({
+      code: 'SESSION_REPLACED',
+      error: `Logged out: Your account is currently active on another device (${liveUser.activeDeviceLabel || 'another PC/Phone/Tablet'}). Only 1 device is allowed at a time.`
+    });
+  }
+
+  const headerDeviceId = req.headers['x-device-id'];
+  if (liveUser.role !== 'admin' && liveUser.activeDeviceId && headerDeviceId && headerDeviceId !== liveUser.activeDeviceId) {
+    return res.status(401).json({
+      code: 'SESSION_REPLACED',
+      error: `Access blocked: Only 1 device (${liveUser.activeDeviceLabel || 'your active device'}) is allowed at a time.`
+    });
   }
 
   // Always bind authoritative live role & identity from DB

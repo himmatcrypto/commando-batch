@@ -13,6 +13,13 @@ function resolveAuthenticatedLiveUser(req) {
   const liveUser = db.findUserById(decoded.id);
   if (!liveUser || liveUser.disabled) return null;
   if ((decoded.tokenVersion || 1) !== (liveUser.tokenVersion || 1)) return null;
+  if (liveUser.role !== 'admin' && liveUser.activeSessionId && decoded.sessionId !== liveUser.activeSessionId) {
+    return null;
+  }
+  const headerDeviceId = req.headers['x-device-id'];
+  if (liveUser.role !== 'admin' && liveUser.activeDeviceId && headerDeviceId && headerDeviceId !== liveUser.activeDeviceId) {
+    return null;
+  }
   return liveUser;
 }
 

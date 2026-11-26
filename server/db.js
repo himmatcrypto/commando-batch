@@ -16,6 +16,7 @@ let db = {
   attempts: [],
   enquiries: [],
   orders: [],
+  deviceBindings: [],
   settings: {
     siteName: 'Commando Batch - Defense & Competitive Exam Portal',
     announcement: 'CRPF & CISF LDCE 2026 and SSC CPO SI Mock Tests are LIVE! Realistic TCS iON CBT Mode Activated.'
@@ -109,12 +110,13 @@ async function initFirebaseSync() {
       const res = await syncAllToFirestore();
       console.log(`🔥 Migrated ${res.totalSynced} records to Cloud Firestore!`);
     } else {
-    const [usersSnap, allTestsSnap, attemptsSnap, enquiriesSnap, ordersSnap] = await Promise.all([
+    const [usersSnap, allTestsSnap, attemptsSnap, enquiriesSnap, ordersSnap, devSnap] = await Promise.all([
       fsDb.collection('users').get(),
       fsDb.collection('tests').get(),
       fsDb.collection('attempts').get(),
       fsDb.collection('enquiries').get(),
-      fsDb.collection('orders').get()
+      fsDb.collection('orders').get(),
+      fsDb.collection('device_bindings').get()
     ]);
 
     if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
@@ -122,6 +124,7 @@ async function initFirebaseSync() {
     if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
     if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
     if (!ordersSnap.empty) db.orders = ordersSnap.docs.map(d => d.data());
+    if (!devSnap.empty) db.deviceBindings = devSnap.docs.map(d => d.data());
       saveDatabase();
       console.log(`🔥 Synced from Cloud Firestore: ${db.users.length} users, ${db.tests.length} tests, ${db.attempts.length} attempts.`);
     }
@@ -277,5 +280,33 @@ module.exports = {
       return db.orders[idx];
     }
     return null;
+  },
+  getDeviceBinding: (deviceId) => {
+    db.deviceBindings = db.deviceBindings || [];
+    return db.deviceBindings.find(d => d.id === deviceId);
+  },
+  upsertDeviceBinding: (deviceId, userId, email, deviceLabel) => {
+    if (!deviceId) return null;
+    db.deviceBindings = db.deviceBindings || [];
+    let rec = db.deviceBindings.find(d => d.id === deviceId);
+    if (!rec) {
+      rec = {
+        id: deviceId,
+        deviceLabel: deviceLabel || 'Unknown Device',
+        userIds: [userId],
+        emails: [email],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      db.deviceBindings.push(rec);
+    } else {
+      if (!rec.userIds.includes(userId)) rec.userIds.push(userId);
+      if (!rec.emails.includes(email)) rec.emails.push(email);
+      if (deviceLabel) rec.deviceLabel = deviceLabel;
+      rec.updatedAt = new Date().toISOString();
+    }
+    saveDatabase();
+    syncDocToFirestore('device_bindings', rec.id, rec);
+    return rec;
   }
 };

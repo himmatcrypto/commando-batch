@@ -34,6 +34,77 @@ function maskRollNo(rollNo) {
   return rollNo ? '****' + String(rollNo).slice(-4) : null;
 }
 
+// Enforce: (1) Warning when multiple candidate accounts are used from same device,
+// and (2) One device at a time (1 PC or Phone/Tablet) per candidate account.
+function bindDeviceAndEnforcePolicy(req, user) {
+  if (!user || user.role === 'admin') {
+    return { sessionId: null, deviceId: null, securityWarning: null, updatedUser: user };
+  }
+
+  const rawDeviceId = (req.body && req.body.deviceId) || req.headers['x-device-id'] || '';
+  const cleanDeviceId = String(rawDeviceId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) ||
+    ('dev_' + crypto.createHash('sha256').update((req.headers['user-agent'] || '') + '|' + (req.ip || '')).digest('hex').slice(0, 16));
+  const cleanDeviceLabel = String((req.body && req.body.deviceLabel) || 'Web Device').trim().slice(0, 60);
+  const newSessionId = 'sess_' + Date.now() + '_' + crypto.randomBytes(6).toString('hex');
+
+  let securityWarning = null;
+  const warnings = Array.isArray(user.securityWarnings) ? [...user.securityWarnings] : [];
+
+  // 1. Check multiple candidate accounts on the same device
+  const existingBinding = db.getDeviceBinding(cleanDeviceId);
+  if (existingBinding && Array.isArray(existingBinding.userIds)) {
+    const otherUsers = existingBinding.userIds.filter(uid => uid !== user.id);
+    if (otherUsers.length > 0) {
+      securityWarning = {
+        type: 'MULTIPLE_ACCOUNTS_WARNING',
+        title: '⚠️ Warning: Multiple Accounts Detected',
+        message: `Security Warning: Multiple candidate accounts (${otherUsers.length + 1} accounts) have been logged in from this device (${cleanDeviceLabel}). Only your own single registered account should be used.`
+      };
+      warnings.unshift({
+        type: 'MULTIPLE_ACCOUNTS_WARNING',
+        deviceLabel: cleanDeviceLabel,
+        message: securityWarning.message,
+        at: new Date().toISOString()
+      });
+      if (warnings.length > 10) warnings.length = 10;
+      security.logSecurityEvent('MULTIPLE_ACCOUNTS_SAME_DEVICE', req, {
+        deviceId: cleanDeviceId,
+        deviceLabel: cleanDeviceLabel,
+        email: user.email,
+        totalAccountsOnDevice: otherUsers.length + 1
+      });
+    }
+  }
+  db.upsertDeviceBinding(cleanDeviceId, user.id, user.email, cleanDeviceLabel);
+
+  // 2. Enforce One Device At a Time (replace any active session on another PC/Phone/Tablet)
+  if (user.activeSessionId && user.activeDeviceId && user.activeDeviceId !== cleanDeviceId) {
+    const prevLabel = user.activeDeviceLabel || 'another device';
+    security.logSecurityEvent('SINGLE_DEVICE_SESSION_REPLACED', req, {
+      email: user.email,
+      previousDevice: prevLabel,
+      newDevice: cleanDeviceLabel
+    });
+    if (!securityWarning) {
+      securityWarning = {
+        type: 'SINGLE_DEVICE_SWITCH',
+        title: '📱 Single-Device Access Active',
+        message: `Only 1 device (1 PC or 1 Phone/Tablet) is allowed at a time. Your previous login on "${prevLabel}" has been automatically logged out.`
+      };
+    }
+  }
+
+  const updatedUser = db.updateUser(user.id, {
+    activeSessionId: newSessionId,
+    activeDeviceId: cleanDeviceId,
+    activeDeviceLabel: cleanDeviceLabel,
+    activeDeviceUpdatedAt: new Date().toISOString(),
+    securityWarnings: warnings
+  }) || user;
+
+  return { sessionId: newSessionId, deviceId: cleanDeviceId, securityWarning, updatedUser };
+}
+
 // Register a new student (with duplicate email/phone detection prompting previous login & reset)
 router.post('/register', security.authRegisterLimiter, (req, res) => {
   try {
@@ -109,21 +180,24 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
     };
 
     db.createUser(newUser);
-    const token = generateToken(newUser);
+    const policy = bindDeviceAndEnforcePolicy(req, newUser);
+    const token = generateToken(policy.updatedUser, policy.sessionId, policy.deviceId);
     security.logSecurityEvent('USER_REGISTERED', req, { email: cleanEmail, role: 'student' });
 
     res.status(201).json({
       message: 'Registration successful! Welcome to Commando Batch.',
       token,
+      securityWarning: policy.securityWarning,
       user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        targetExam: newUser.targetExam,
-        force: newUser.force,
-        rollNo: newUser.rollNo,
-        activePackage: null
+        id: policy.updatedUser.id,
+        name: policy.updatedUser.name,
+        email: policy.updatedUser.email,
+        role: policy.updatedUser.role,
+        targetExam: policy.updatedUser.targetExam,
+        force: policy.updatedUser.force,
+        rollNo: policy.updatedUser.rollNo,
+        activePackage: null,
+        activeDeviceLabel: policy.updatedUser.activeDeviceLabel || null
       }
     });
   } catch (err) {
@@ -187,7 +261,8 @@ router.post('/login', security.authLoginLimiter, (req, res) => {
     }
 
     security.clearFailedLogins(cleanEmail);
-    const token = generateToken(user);
+    const policy = bindDeviceAndEnforcePolicy(req, user);
+    const token = generateToken(policy.updatedUser, policy.sessionId, policy.deviceId);
 
     if (user.role === 'admin') {
       security.logSecurityEvent('ADMIN_LOGIN_SUCCESS', req, { email: cleanEmail, userId: user.id });
@@ -196,15 +271,17 @@ router.post('/login', security.authLoginLimiter, (req, res) => {
     res.json({
       message: 'Login successful',
       token,
+      securityWarning: policy.securityWarning,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        targetExam: user.targetExam,
-        force: user.force,
-        rollNo: user.rollNo,
-        activePackage: user.activePackage || null
+        id: policy.updatedUser.id,
+        name: policy.updatedUser.name,
+        email: policy.updatedUser.email,
+        role: policy.updatedUser.role,
+        targetExam: policy.updatedUser.targetExam,
+        force: policy.updatedUser.force,
+        rollNo: policy.updatedUser.rollNo,
+        activePackage: policy.updatedUser.activePackage || null,
+        activeDeviceLabel: policy.updatedUser.activeDeviceLabel || null
       }
     });
   } catch (err) {
@@ -365,25 +442,44 @@ router.post('/google', security.authLoginLimiter, async (req, res) => {
       security.logSecurityEvent('GOOGLE_USER_REGISTERED', req, { email: cleanEmail, userId: user.id });
     }
 
-    const token = generateToken(user);
+    const policy = bindDeviceAndEnforcePolicy(req, user);
+    const token = generateToken(policy.updatedUser, policy.sessionId, policy.deviceId);
     res.json({
       message: isNewUser ? `Google Sign-Up successful! Assigned Roll: ${user.rollNo}` : `Welcome back, ${user.name}!`,
       token,
       isNewUser,
+      securityWarning: policy.securityWarning,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        targetExam: user.targetExam,
-        force: user.force,
-        rollNo: user.rollNo,
-        activePackage: user.activePackage || null
+        id: policy.updatedUser.id,
+        name: policy.updatedUser.name,
+        email: policy.updatedUser.email,
+        role: policy.updatedUser.role,
+        targetExam: policy.updatedUser.targetExam,
+        force: policy.updatedUser.force,
+        rollNo: policy.updatedUser.rollNo,
+        activePackage: policy.updatedUser.activePackage || null,
+        activeDeviceLabel: policy.updatedUser.activeDeviceLabel || null
       }
     });
   } catch (err) {
     console.error('Google auth error:', err);
     res.status(401).json({ error: 'Google Sign-In verification failed. Please try again.' });
+  }
+});
+
+// Logout: clears activeSessionId so candidate can switch cleanly to another device
+router.post('/logout', requireAuth, (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      db.updateUser(req.user.id, {
+        activeSessionId: null,
+        activeDeviceId: null,
+        activeDeviceLabel: null
+      });
+    }
+    res.json({ message: 'Logged out cleanly. You can now sign in from any PC, Phone, or Tablet.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Logout error' });
   }
 });
 

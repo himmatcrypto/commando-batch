@@ -74,6 +74,9 @@ const Admin = (function () {
           <button class="btn-demo-pill" style="border-color: #38bdf8; color: #38bdf8; font-weight: 700;" onclick="Admin.openCashfreeConfigModal()">
             💳 Cashfree Setup
           </button>
+          <button class="btn-demo-pill" style="border-color: #4ade80; color: #4ade80; font-weight: 700;" onclick="Admin.openEmailModal()">
+            📧 Send Email
+          </button>
           <button class="btn-demo-pill" style="border-color: #f59e0b; color: #fbbf24; font-weight: 700;" onclick="Admin.syncFirebase()">
             🔥 Sync to Firestore
           </button>
@@ -1446,10 +1449,109 @@ const Admin = (function () {
     }
   }
 
+  async function openEmailModal() {
+    try {
+      const [status, studentsRes] = await Promise.all([
+        API.getAdminEmailStatus(),
+        API.getAdminStudents()
+      ]);
+      const students = (studentsRes && studentsRes.students) || [];
+      const studentOptions = students
+        .filter(s => s.email)
+        .map(s => `<option value="${escapeHtml(s.email)}">${escapeHtml(s.name)} (${escapeHtml(s.email)})</option>`)
+        .join('');
+
+      const html = `
+        <div style="margin-bottom: 1.15rem;">
+          <h2 style="color: #fff; font-size: 1.4rem;">📧 Admin Email Dispatch Center</h2>
+          <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem;">
+            Send direct notices or announcements to any candidate using your configured SMTP sender.
+          </p>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid ${status.configured ? '#22c55e' : '#f59e0b'}; border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 1rem; font-size: 0.84rem;">
+          <div>Sender Status: <strong style="color: ${status.configured ? '#4ade80' : '#fbbf24'};">${status.configured ? '🟢 ACTIVE (' + escapeHtml(String(status.provider || 'smtp').toUpperCase()) + ')' : '🟡 NOT CONFIGURED'}</strong></div>
+          <div style="color:#cbd5e1; margin-top:0.2rem;">From: <code>${escapeHtml(status.sender || 'Not set')}</code> • Registered Students: <strong>${status.totalStudents || 0}</strong></div>
+        </div>
+
+        <form onsubmit="Admin.handleSendAdminEmail(event)">
+          <div class="form-group">
+            <label class="form-label">Send To</label>
+            <select id="adminEmailMode" class="form-select" onchange="Admin.toggleEmailRecipientMode()">
+              <option value="single">Single Candidate / Any Email Address</option>
+              <option value="all">All Registered Candidates (${status.totalStudents || 0})</option>
+            </select>
+          </div>
+          <div id="adminSingleEmailGroup">
+            ${studentOptions ? `
+              <div class="form-group">
+                <label class="form-label">Quick Select Registered Candidate (Optional)</label>
+                <select id="adminStudentEmailPick" class="form-select" onchange="document.getElementById('adminToEmailInput').value = this.value">
+                  <option value="">-- Choose student or type email below --</option>
+                  ${studentOptions}
+                </select>
+              </div>
+            ` : ''}
+            <div class="form-group">
+              <label class="form-label">Recipient Email Address</label>
+              <input type="email" id="adminToEmailInput" class="form-input" placeholder="candidate@example.com">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email Subject</label>
+            <input type="text" id="adminEmailSubject" class="form-input" placeholder="e.g. Important Mock Test Schedule Update" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Message</label>
+            <textarea id="adminEmailMessage" class="form-input" rows="5" placeholder="Write your message for the candidate(s)..." required style="resize: vertical;"></textarea>
+          </div>
+          <div style="display: flex; gap: 0.75rem; margin-top: 1.15rem;">
+            <button type="button" class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
+            <button type="submit" class="btn-3d btn-3d-success" style="flex: 2;">📤 Send Email Now</button>
+          </div>
+        </form>
+      `;
+      App.openGeneralModal(html);
+    } catch (err) {
+      App.showToast(err.message || 'Unable to open Email panel.', 'error');
+    }
+  }
+
+  function toggleEmailRecipientMode() {
+    const mode = document.getElementById('adminEmailMode')?.value || 'single';
+    const grp = document.getElementById('adminSingleEmailGroup');
+    if (grp) grp.style.display = mode === 'all' ? 'none' : 'block';
+  }
+
+  async function handleSendAdminEmail(e) {
+    e.preventDefault();
+    const mode = document.getElementById('adminEmailMode').value;
+    const toEmail = document.getElementById('adminToEmailInput')?.value.trim() || '';
+    const subject = document.getElementById('adminEmailSubject').value.trim();
+    const message = document.getElementById('adminEmailMessage').value.trim();
+
+    if (mode === 'single' && !toEmail) {
+      App.showToast('Please enter or select a recipient email address.', 'warning');
+      return;
+    }
+
+    try {
+      App.showToast('Sending email...', 'info');
+      const res = await API.sendAdminEmail({ mode, toEmail, subject, message });
+      App.closeGeneralModal();
+      App.showToast(res.message || 'Email sent successfully!', 'success');
+    } catch (err) {
+      App.showToast(err.message || 'Failed to send email.', 'error');
+    }
+  }
+
   return {
     loadAdminDashboard,
     openCashfreeConfigModal,
     saveCashfreeConfig,
+    openEmailModal,
+    toggleEmailRecipientMode,
+    handleSendAdminEmail,
     switchAdminTab,
     openCreateTestModal,
     addQuestionForm,

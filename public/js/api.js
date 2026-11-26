@@ -252,6 +252,17 @@ const API = (function () {
       });
     },
 
+    async getAdminEmailStatus() {
+      return await request('/api/admin/email/status');
+    },
+
+    async sendAdminEmail(payload) {
+      return await request('/api/admin/email/send', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
     // Tests & CBT
     async getTests(category) {
       const q = category && category !== 'all' ? `?category=${category}` : '';

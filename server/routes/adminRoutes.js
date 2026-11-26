@@ -6,6 +6,7 @@ const security = require('../security');
 const { requireAdmin, isSecretReady } = require('../auth');
 const { getCashfreeConfig, clearCashfreeConfigCache } = require('./paymentRoutes');
 const { getSeedData } = require('../seedData');
+const mailer = require('../mailer');
 
 // Protect all admin routes
 router.use(requireAdmin);
@@ -443,6 +444,85 @@ router.post('/firebase/sync', async (req, res) => {
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin: Email sender status (never exposes passwords/API keys)
+router.get('/email/status', (req, res) => {
+  const cfg = mailer.getEmailConfig();
+  const students = (db.getDb().users || []).filter(u => u.role === 'student' && security.isValidEmail(u.email));
+  res.json({
+    configured: cfg.configured,
+    provider: cfg.provider,
+    sender: cfg.from,
+    totalStudents: students.length
+  });
+});
+
+// Admin: Send email to a specific user/email or broadcast to all registered students
+router.post('/email/send', async (req, res) => {
+  try {
+    const { mode, toEmail, subject, message } = req.body;
+    const cleanSubject = String(subject || '').trim().slice(0, 160);
+    const cleanMessage = String(message || '').trim().slice(0, 5000);
+
+    if (!cleanSubject || !cleanMessage) {
+      return res.status(400).json({ error: 'Email Subject and Message are required.' });
+    }
+
+    let recipients = [];
+    if (mode === 'all') {
+      const students = (db.getDb().users || []).filter(u => u.role === 'student' && security.isValidEmail(u.email));
+      recipients = [...new Set(students.map(u => u.email.trim().toLowerCase()))];
+      if (recipients.length === 0) {
+        return res.status(400).json({ error: 'No registered student email addresses found.' });
+      }
+    } else {
+      const cleanTo = String(toEmail || '').trim().toLowerCase();
+      if (!security.isValidEmail(cleanTo)) {
+        return res.status(400).json({ error: 'Please enter a valid recipient email address.' });
+      }
+      recipients = [cleanTo];
+    }
+
+    const bodyHtml = cleanMessage
+      .split(/\r?\n/)
+      .map(line => `<p style="margin: 0 0 10px 0;">${mailer.escapeHtml(line) || '&nbsp;'}</p>`)
+      .join('');
+    const html = mailer.wrapBrandedHtml({
+      title: cleanSubject,
+      bodyHtml
+    });
+
+    let sentCount = 0;
+    let failedCount = 0;
+    for (const email of recipients) {
+      try {
+        await mailer.sendMail({ to: email, subject: cleanSubject, text: cleanMessage, html });
+        sentCount += 1;
+      } catch (e) {
+        if (e.statusCode === 503) throw e;
+        failedCount += 1;
+      }
+    }
+
+    security.logSecurityEvent('ADMIN_EMAIL_SENT', req, {
+      mode: mode === 'all' ? 'all' : 'single',
+      sentCount,
+      failedCount,
+      adminEmail: req.user.email
+    });
+
+    res.json({
+      message: mode === 'all'
+        ? `Email sent to ${sentCount} student(s)${failedCount ? ` (${failedCount} failed)` : ''}.`
+        : `Email delivered to ${recipients[0]}!`,
+      sentCount,
+      failedCount
+    });
+  } catch (err) {
+    console.error('Admin send email error:', err);
+    res.status(err.statusCode || 500).json({ error: err.message || 'Failed to send email.' });
   }
 });
 

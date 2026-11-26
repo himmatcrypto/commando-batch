@@ -1,10 +1,10 @@
 const express = require('express');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const router = express.Router();
 const db = require('../db');
 const firebase = require('../firebase');
 const security = require('../security');
+const mailer = require('../mailer');
 const {
   hashPassword,
   comparePassword,
@@ -125,70 +125,6 @@ function findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits) {
   };
 }
 
-async function sendRegistrationOtpEmail(toEmail, otp) {
-  const dbEmailCfg = (db.getDb().settings && db.getDb().settings.email) || {};
-  const resendApiKey = process.env.RESEND_API_KEY || dbEmailCfg.resendApiKey;
-  const subject = `Commando Batch - Email Verification Code: ${otp}`;
-  const textBody = `Your 6-digit verification code for Commando Batch candidate registration is ${otp}. This code is valid for 10 minutes. Do not share this code with anyone.`;
-  const htmlBody = `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background: #0f172a; color: #e2e8f0; border-radius: 12px; border: 1px solid #334155;">
-      <h2 style="margin: 0 0 12px 0; color: #38bdf8;">Commando Batch — Email Verification</h2>
-      <p style="margin: 0 0 16px 0; line-height: 1.5;">Use the verification code below to complete your candidate registration on <strong>commandobatch.in</strong>:</p>
-      <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; text-align: center; padding: 14px 20px; background: #1e293b; color: #4ade80; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px;">
-        ${otp}
-      </div>
-      <p style="margin: 0; font-size: 13px; color: #94a3b8;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
-    </div>
-  `;
-
-  if (resendApiKey) {
-    const fromAddr = process.env.EMAIL_FROM || dbEmailCfg.from || 'Commando Batch <onboarding@resend.dev>';
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ from: fromAddr, to: [toEmail], subject, html: htmlBody, text: textBody })
-    });
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
-      const err = new Error(`Email provider error: ${errText || r.status}`);
-      err.statusCode = 502;
-      throw err;
-    }
-    return 'RESEND';
-  }
-
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || dbEmailCfg.user;
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || dbEmailCfg.pass;
-  const smtpHost = process.env.SMTP_HOST || dbEmailCfg.host || (smtpUser ? 'smtp.gmail.com' : '');
-  const smtpPort = Number(process.env.SMTP_PORT || dbEmailCfg.port || 587);
-
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    const err = new Error('Email OTP service is not configured yet. Please configure GMAIL_USER & GMAIL_APP_PASSWORD (or SMTP_* / RESEND_API_KEY) on the server.');
-    err.statusCode = 503;
-    throw err;
-  }
-
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpPort === 465,
-    auth: { user: smtpUser, pass: smtpPass }
-  });
-
-  const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_FROM || dbEmailCfg.from || `"Commando Batch" <${smtpUser}>`;
-  await transporter.sendMail({
-    from: fromAddr,
-    to: toEmail,
-    subject,
-    text: textBody,
-    html: htmlBody
-  });
-  return 'SMTP';
-}
-
 // Pre-check before sending Email OTP (prevents wasting emails on already-registered accounts)
 router.post('/check-register-eligibility', security.authRegisterLimiter, (req, res) => {
   try {
@@ -250,7 +186,7 @@ router.post('/send-register-otp', security.authRegisterLimiter, async (req, res)
     const otp = String(crypto.randomInt(100000, 1000000));
     const otpHash = crypto.createHash('sha256').update(`${cleanEmail}:${otp}`).digest('hex');
 
-    await sendRegistrationOtpEmail(cleanEmail, otp);
+    await mailer.sendRegistrationOtpEmail(cleanEmail, otp);
 
     pendingEmailOtps.set(cleanEmail, {
       otpHash,
@@ -435,6 +371,7 @@ router.post('/register', security.authRegisterLimiter, async (req, res) => {
     };
 
     db.createUser(newUser);
+    mailer.sendWelcomeEmail(newUser).catch(e => console.warn('Welcome email warning:', e.message));
     const policy = bindDeviceAndEnforcePolicy(req, newUser);
     const token = generateToken(policy.updatedUser, policy.sessionId, policy.deviceId);
     security.logSecurityEvent('USER_REGISTERED', req, { email: cleanEmail, role: 'student' });
@@ -695,6 +632,7 @@ router.post('/google', security.authLoginLimiter, async (req, res) => {
         createdAt: new Date().toISOString()
       });
       security.logSecurityEvent('GOOGLE_USER_REGISTERED', req, { email: cleanEmail, userId: user.id });
+      mailer.sendWelcomeEmail(user).catch(e => console.warn('Google welcome email warning:', e.message));
     }
 
     const policy = bindDeviceAndEnforcePolicy(req, user);

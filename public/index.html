@@ -926,9 +926,31 @@
           <input type="text" id="regName" class="form-input" placeholder="e.g. Sub-Inspector Rakesh Kumar" required>
         </div>
         <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="regEmail" class="form-input" placeholder="rakesh@bsf.gov.in" required>
+          <label class="form-label">Email Address (Verification Code Required) <span style="color:#ef4444;">*</span></label>
+          <div style="display: flex; gap: 0.45rem;">
+            <input type="email" id="regEmail" class="form-input" placeholder="rakesh@bsf.gov.in" required style="flex: 1;">
+            <button type="button" id="btnSendRegOtp" class="btn-demo-pill" onclick="App.sendRegisterOtp()" style="white-space: nowrap; border-color: #38bdf8; color: #38bdf8; padding: 0 0.75rem; font-weight: 700;">
+              📧 Send OTP
+            </button>
+          </div>
         </div>
+
+        <!-- Email OTP Verification Box -->
+        <div id="regOtpGroup" style="display: none; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem;">
+          <label class="form-label" style="color: #7dd3fc;">Enter 6-Digit Email Verification Code</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="regOtpCode" class="form-input" placeholder="6-digit code" maxlength="6" inputmode="numeric" style="flex: 1; letter-spacing: 3px; font-weight: 700;">
+            <button type="button" id="btnVerifyRegOtp" class="btn-3d btn-3d-success" onclick="App.verifyRegisterOtp()" style="padding: 0.55rem 0.9rem; font-size: 0.85rem; white-space: nowrap;">
+              ✓ Verify Code
+            </button>
+          </div>
+          <div id="regOtpStatus" style="font-size: 0.78rem; color: #cbd5e1; margin-top: 0.4rem;"></div>
+        </div>
+
+        <div id="regOtpVerifiedBadge" style="display: none; background: rgba(34, 197, 94, 0.14); border: 1px solid #22c55e; border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; color: #4ade80; font-size: 0.84rem; font-weight: 700;">
+          🟢 Email Verified via Verification Code! Ready to create account.
+        </div>
+
         <div class="form-group">
           <label class="form-label">Target Examination</label>
           <select id="regTargetExam" class="form-select">
@@ -959,32 +981,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Mobile Number (10 Digits — OTP Required) <span style="color:#ef4444;">*</span></label>
-            <div style="display: flex; gap: 0.45rem;">
-              <input type="tel" id="regPhone" class="form-input" placeholder="e.g. 9876543210" maxlength="10" required style="flex: 1;">
-              <button type="button" id="btnSendRegOtp" class="btn-demo-pill" onclick="App.sendRegisterOtp()" style="white-space: nowrap; border-color: #38bdf8; color: #38bdf8; padding: 0 0.75rem; font-weight: 700;">
-                📲 Send OTP
-              </button>
-            </div>
+            <label class="form-label">Mobile Number (10 Digits) <span style="color:#ef4444;">*</span></label>
+            <input type="tel" id="regPhone" class="form-input" placeholder="e.g. 9876543210" maxlength="10" required>
           </div>
-        </div>
-
-        <div id="regRecaptchaContainer"></div>
-
-        <!-- Mobile OTP Verification Box -->
-        <div id="regOtpGroup" style="display: none; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem;">
-          <label class="form-label" style="color: #7dd3fc;">Enter 6-Digit Mobile OTP</label>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <input type="text" id="regOtpCode" class="form-input" placeholder="6-digit OTP" maxlength="6" inputmode="numeric" style="flex: 1; letter-spacing: 3px; font-weight: 700;">
-            <button type="button" id="btnVerifyRegOtp" class="btn-3d btn-3d-success" onclick="App.verifyRegisterOtp()" style="padding: 0.55rem 0.9rem; font-size: 0.85rem; white-space: nowrap;">
-              ✓ Verify OTP
-            </button>
-          </div>
-          <div id="regOtpStatus" style="font-size: 0.78rem; color: #cbd5e1; margin-top: 0.4rem;"></div>
-        </div>
-
-        <div id="regOtpVerifiedBadge" style="display: none; background: rgba(34, 197, 94, 0.14); border: 1px solid #22c55e; border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; color: #4ade80; font-size: 0.84rem; font-weight: 700;">
-          🟢 Mobile Number Verified via OTP! Ready to create account.
         </div>
         <div class="form-group">
           <label class="form-label">Set Password (Min 8 chars: Uppercase, Lowercase & Number)</label>
@@ -1030,14 +1029,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="js/firebaseConfig.js?v=20261126m"></script>
+  <script src="js/firebaseConfig.js?v=20261127a"></script>
 
   <!-- App Scripts -->
-  <script src="js/threeBadge.js?v=20261126m"></script>
-  <script src="js/api.js?v=20261126m"></script>
-  <script src="js/cbtEngine.js?v=20261126m"></script>
-  <script src="js/scorecard.js?v=20261126m"></script>
-  <script src="js/admin.js?v=20261126m"></script>
-  <script src="js/app.js?v=20261126m"></script>
+  <script src="js/threeBadge.js?v=20261127a"></script>
+  <script src="js/api.js?v=20261127a"></script>
+  <script src="js/cbtEngine.js?v=20261127a"></script>
+  <script src="js/scorecard.js?v=20261127a"></script>
+  <script src="js/admin.js?v=20261127a"></script>
+  <script src="js/app.js?v=20261127a"></script>
 </body>
 </html>

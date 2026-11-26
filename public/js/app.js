@@ -716,25 +716,22 @@ const App = (function () {
     }
   }
 
-  let regConfirmationResult = null;
-  let regVerifiedPhoneIdToken = null;
-  let regVerifiedPhoneNumber = null;
-  let regUseBackendOtp = false;
-  let regRecaptchaVerifier = null;
+  let regOtpToken = null;
+  let regVerifiedEmailToken = null;
+  let regVerifiedEmailAddress = null;
 
   function resetRegOtpState() {
-    regConfirmationResult = null;
-    regVerifiedPhoneIdToken = null;
-    regVerifiedPhoneNumber = null;
-    regUseBackendOtp = false;
+    regOtpToken = null;
+    regVerifiedEmailToken = null;
+    regVerifiedEmailAddress = null;
     const otpGroup = document.getElementById('regOtpGroup');
     const verifiedBadge = document.getElementById('regOtpVerifiedBadge');
     const otpInput = document.getElementById('regOtpCode');
-    const phoneInput = document.getElementById('regPhone');
+    const emailInput = document.getElementById('regEmail');
     if (otpGroup) otpGroup.style.display = 'none';
     if (verifiedBadge) verifiedBadge.style.display = 'none';
     if (otpInput) otpInput.value = '';
-    if (phoneInput) phoneInput.readOnly = false;
+    if (emailInput) emailInput.readOnly = false;
   }
 
   function showDuplicateAccountBox(info, typedEmail) {
@@ -762,95 +759,60 @@ const App = (function () {
   }
 
   async function sendRegisterOtp() {
-    const email = (document.getElementById('regEmail')?.value || '').trim();
+    const email = (document.getElementById('regEmail')?.value || '').trim().toLowerCase();
     const rawPhone = (document.getElementById('regPhone')?.value || '').replace(/\D/g, '').slice(-10);
     const dupAlert = document.getElementById('regDuplicateAlert');
     if (dupAlert) { dupAlert.style.display = 'none'; dupAlert.innerHTML = ''; }
 
-    if (!email) {
-      showToast('Please enter your Email Address first.', 'warning');
-      return;
-    }
-    if (!/^[6-9]\d{9}$/.test(rawPhone)) {
-      showToast('Please enter a valid 10-digit Indian mobile number.', 'warning');
+    if (!email || !email.includes('@')) {
+      showToast('Please enter a valid Email Address first.', 'warning');
       return;
     }
 
     try {
-      showToast('Checking account & sending Mobile OTP...', 'info');
+      showToast('Sending verification code to your email...', 'info');
       await API.checkRegisterEligibility(email, rawPhone);
 
-      const otpInit = await API.sendRegisterOtp(rawPhone);
-      if (otpInit && !otpInit.useFirebasePhone) {
-        regUseBackendOtp = true;
-        document.getElementById('regOtpGroup').style.display = 'block';
-        document.getElementById('regOtpStatus').textContent = otpInit.message || `OTP sent to +91-${rawPhone}`;
-        showToast(otpInit.message || 'OTP sent to your mobile!', 'success');
-        return;
-      }
-
-      // Firebase Phone Auth OTP
-      if (!window.CommandoFirebase || !window.CommandoFirebase.isReady()) {
-        window.CommandoFirebase && window.CommandoFirebase.init();
-      }
-      const fbAuth = window.CommandoFirebase && window.CommandoFirebase.getAuth();
-      if (!fbAuth || typeof firebase === 'undefined' || !firebase.auth) {
-        throw new Error('Firebase Phone Auth SDK is unavailable. Please refresh and try again.');
-      }
-
-      if (!regRecaptchaVerifier) {
-        regRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('regRecaptchaContainer', { size: 'invisible' });
-      }
-      regConfirmationResult = await fbAuth.signInWithPhoneNumber(`+91${rawPhone}`, regRecaptchaVerifier);
-      regUseBackendOtp = false;
+      const otpInit = await API.sendRegisterOtp(email);
+      regOtpToken = otpInit.otpToken || null;
+      regVerifiedEmailToken = null;
+      regVerifiedEmailAddress = null;
       document.getElementById('regOtpGroup').style.display = 'block';
-      document.getElementById('regOtpStatus').textContent = `SMS OTP sent to +91-${rawPhone}. Valid for 5 minutes.`;
-      showToast(`📲 OTP sent to +91-${rawPhone}!`, 'success');
+      document.getElementById('regOtpVerifiedBadge').style.display = 'none';
+      document.getElementById('regOtpStatus').textContent = otpInit.message || `Verification code sent to ${email}. Valid for 10 minutes.`;
+      showToast(`📧 Verification code sent to ${email}!`, 'success');
     } catch (err) {
       if (err.data && err.data.alreadyRegistered) {
         showDuplicateAccountBox(err.data.existingAccount || {}, email);
       }
-      const msg = err.code === 'auth/operation-not-allowed'
-        ? 'Enable "Phone" under Firebase Console → Authentication → Sign-in method to send free SMS OTPs.'
-        : (err.message || 'Unable to send OTP.');
-      showToast(msg, 'error');
+      showToast(err.message || 'Unable to send email verification code.', 'error');
     }
   }
 
   async function verifyRegisterOtp() {
-    const rawPhone = (document.getElementById('regPhone')?.value || '').replace(/\D/g, '').slice(-10);
+    const email = (document.getElementById('regEmail')?.value || '').trim().toLowerCase();
     const otpCode = (document.getElementById('regOtpCode')?.value || '').trim();
     if (!/^\d{6}$/.test(otpCode)) {
-      showToast('Please enter the 6-digit OTP received on your mobile.', 'warning');
+      showToast('Please enter the 6-digit verification code sent to your email.', 'warning');
       return false;
     }
-
-    if (regUseBackendOtp) {
-      regVerifiedPhoneNumber = rawPhone;
-      document.getElementById('regOtpGroup').style.display = 'none';
-      document.getElementById('regOtpVerifiedBadge').style.display = 'block';
-      document.getElementById('regPhone').readOnly = true;
-      showToast('Mobile OTP ready for account creation!', 'success');
-      return true;
-    }
-
-    if (!regConfirmationResult) {
-      showToast('Please click "Send OTP" first.', 'warning');
+    if (!regOtpToken) {
+      showToast('Please click "📧 Send OTP" first.', 'warning');
       return false;
     }
 
     try {
-      showToast('Verifying mobile OTP...', 'info');
-      const cred = await regConfirmationResult.confirm(otpCode);
-      regVerifiedPhoneIdToken = await cred.user.getIdToken();
-      regVerifiedPhoneNumber = rawPhone;
+      showToast('Verifying email code...', 'info');
+      const res = await API.verifyRegisterOtp(email, otpCode, regOtpToken);
+      regVerifiedEmailToken = res.emailVerifiedToken;
+      regVerifiedEmailAddress = email;
       document.getElementById('regOtpGroup').style.display = 'none';
       document.getElementById('regOtpVerifiedBadge').style.display = 'block';
-      document.getElementById('regPhone').readOnly = true;
-      showToast('🟢 Mobile number verified! Click "Create Account" to finish.', 'success');
+      document.getElementById('regEmail').readOnly = true;
+      showToast('🟢 Email verified! Click "Create Account" to finish.', 'success');
       return true;
     } catch (err) {
-      showToast(err.message || 'Invalid OTP. Please check and try again.', 'error');
+      showToast(err.message || 'Invalid verification code. Please check and try again.', 'error');
       return false;
     }
   }
@@ -858,7 +820,7 @@ const App = (function () {
   async function handleRegister(e) {
     e.preventDefault();
     const name = document.getElementById('regName').value.trim();
-    const email = document.getElementById('regEmail').value.trim();
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
     const password = document.getElementById('regPassword').value;
     const targetExam = document.getElementById('regTargetExam').value;
     const force = document.getElementById('regForce').value.trim();
@@ -872,14 +834,14 @@ const App = (function () {
       return;
     }
 
-    // Auto-verify OTP if user entered 6 digits and clicked Create Account directly
-    if (!regVerifiedPhoneIdToken && !regUseBackendOtp && regConfirmationResult && /^\d{6}$/.test(otpCode)) {
+    // Auto-verify Email OTP if user entered 6 digits and clicked Create Account directly
+    if (!regVerifiedEmailToken && regOtpToken && /^\d{6}$/.test(otpCode)) {
       const ok = await verifyRegisterOtp();
       if (!ok) return;
     }
 
-    if (!regVerifiedPhoneIdToken && !(regUseBackendOtp && /^\d{6}$/.test(otpCode))) {
-      showToast('Please click "📲 Send OTP" and verify your mobile number first.', 'warning');
+    if (!regVerifiedEmailToken || regVerifiedEmailAddress !== email) {
+      showToast('Please click "📧 Send OTP" and verify your email address first.', 'warning');
       return;
     }
 
@@ -892,8 +854,7 @@ const App = (function () {
         targetExam,
         force,
         phone,
-        phoneIdToken: regVerifiedPhoneIdToken || undefined,
-        phoneOtp: regUseBackendOtp ? otpCode : undefined
+        emailVerifiedToken: regVerifiedEmailToken
       });
       resetRegOtpState();
       updateAuthUI();

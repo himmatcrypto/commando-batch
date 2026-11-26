@@ -177,6 +177,18 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function verifyScopedToken(token) {
+  try {
+    return jwt.verify(token, getJwtSecret());
+  } catch (err) {
+    return null;
+  }
+}
+
+function signScopedToken(payload, expiresIn = '10m') {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn });
+}
+
 // Middleware: Admin required
 function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
@@ -195,6 +207,8 @@ module.exports = {
   DUMMY_HASH,
   generateToken,
   verifyToken,
+  signScopedToken,
+  verifyScopedToken,
   requireAuth,
   requireAdmin
 };

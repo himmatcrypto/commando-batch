@@ -123,17 +123,24 @@ const API = (function () {
       return res;
     },
 
-    async checkRegisterEligibility(email, phone) {
+    async checkRegisterEligibility(email, phone = '') {
       return await request('/api/auth/check-register-eligibility', {
         method: 'POST',
         body: JSON.stringify({ email, phone })
       });
     },
 
-    async sendRegisterOtp(phone) {
+    async sendRegisterOtp(email) {
       return await request('/api/auth/send-register-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone })
+        body: JSON.stringify({ email })
+      });
+    },
+
+    async verifyRegisterOtp(email, otp, otpToken) {
+      return await request('/api/auth/verify-register-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, otp, otpToken })
       });
     },
 

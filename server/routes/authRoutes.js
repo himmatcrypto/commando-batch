@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const router = express.Router();
 const db = require('../db');
 const firebase = require('../firebase');
@@ -9,6 +10,8 @@ const {
   comparePassword,
   DUMMY_HASH,
   generateToken,
+  signScopedToken,
+  verifyScopedToken,
   requireAuth
 } = require('../auth');
 
@@ -105,8 +108,8 @@ function bindDeviceAndEnforcePolicy(req, user) {
   return { sessionId: newSessionId, deviceId: cleanDeviceId, securityWarning, updatedUser };
 }
 
-// In-memory store for optional backend SMS OTP fallback (5 min TTL, max 5 tries)
-const pendingPhoneOtps = new Map();
+// In-memory attempt limiter for registration email OTPs (stateless verification uses signed JWT tokens)
+const pendingEmailOtps = new Map();
 
 function findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits) {
   const existingByEmail = cleanEmail ? db.findUserByEmail(cleanEmail) : null;
@@ -122,7 +125,71 @@ function findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits) {
   };
 }
 
-// Pre-check before sending Mobile OTP (prevents wasting SMS on already-registered accounts)
+async function sendRegistrationOtpEmail(toEmail, otp) {
+  const dbEmailCfg = (db.getDb().settings && db.getDb().settings.email) || {};
+  const resendApiKey = process.env.RESEND_API_KEY || dbEmailCfg.resendApiKey;
+  const subject = `Commando Batch - Email Verification Code: ${otp}`;
+  const textBody = `Your 6-digit verification code for Commando Batch candidate registration is ${otp}. This code is valid for 10 minutes. Do not share this code with anyone.`;
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; background: #0f172a; color: #e2e8f0; border-radius: 12px; border: 1px solid #334155;">
+      <h2 style="margin: 0 0 12px 0; color: #38bdf8;">Commando Batch — Email Verification</h2>
+      <p style="margin: 0 0 16px 0; line-height: 1.5;">Use the verification code below to complete your candidate registration on <strong>commandobatch.in</strong>:</p>
+      <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; text-align: center; padding: 14px 20px; background: #1e293b; color: #4ade80; border-radius: 8px; border: 1px solid #22c55e; margin-bottom: 16px;">
+        ${otp}
+      </div>
+      <p style="margin: 0; font-size: 13px; color: #94a3b8;">This code expires in 10 minutes. If you did not request this, please ignore this email.</p>
+    </div>
+  `;
+
+  if (resendApiKey) {
+    const fromAddr = process.env.EMAIL_FROM || dbEmailCfg.from || 'Commando Batch <onboarding@resend.dev>';
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ from: fromAddr, to: [toEmail], subject, html: htmlBody, text: textBody })
+    });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      const err = new Error(`Email provider error: ${errText || r.status}`);
+      err.statusCode = 502;
+      throw err;
+    }
+    return 'RESEND';
+  }
+
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || dbEmailCfg.user;
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || dbEmailCfg.pass;
+  const smtpHost = process.env.SMTP_HOST || dbEmailCfg.host || (smtpUser ? 'smtp.gmail.com' : '');
+  const smtpPort = Number(process.env.SMTP_PORT || dbEmailCfg.port || 587);
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    const err = new Error('Email OTP service is not configured yet. Please configure GMAIL_USER & GMAIL_APP_PASSWORD (or SMTP_* / RESEND_API_KEY) on the server.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass }
+  });
+
+  const fromAddr = process.env.SMTP_FROM || process.env.EMAIL_FROM || dbEmailCfg.from || `"Commando Batch" <${smtpUser}>`;
+  await transporter.sendMail({
+    from: fromAddr,
+    to: toEmail,
+    subject,
+    text: textBody,
+    html: htmlBody
+  });
+  return 'SMTP';
+}
+
+// Pre-check before sending Email OTP (prevents wasting emails on already-registered accounts)
 router.post('/check-register-eligibility', security.authRegisterLimiter, (req, res) => {
   try {
     const { email, phone } = req.body;
@@ -132,7 +199,7 @@ router.post('/check-register-eligibility', security.authRegisterLimiter, (req, r
     if (!cleanEmail || !security.isValidEmail(cleanEmail)) {
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
-    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+    if (phoneDigits && !/^[6-9]\d{9}$/.test(phoneDigits)) {
       return res.status(400).json({ error: 'Please enter a valid 10-digit Indian mobile number.' });
     }
 
@@ -151,60 +218,123 @@ router.post('/check-register-eligibility', security.authRegisterLimiter, (req, r
       });
     }
 
-    res.json({ eligible: true, phone: phoneDigits });
+    res.json({ eligible: true, email: cleanEmail });
   } catch (err) {
     res.status(500).json({ error: 'Unable to verify registration eligibility.' });
   }
 });
 
-// Optional backend SMS OTP sender (uses Fast2SMS if configured; otherwise signals Firebase Phone Auth)
+// Send 6-digit Email Verification OTP during candidate registration
 router.post('/send-register-otp', security.authRegisterLimiter, async (req, res) => {
   try {
-    const phoneDigits = String((req.body && req.body.phone) || '').replace(/\D/g, '').slice(-10);
-    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
-      return res.status(400).json({ error: 'Please enter a valid 10-digit Indian mobile number.' });
+    const cleanEmail = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!cleanEmail || !security.isValidEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
 
-    const apiKey = process.env.FAST2SMS_API_KEY;
-    if (!apiKey) {
-      return res.json({ useFirebasePhone: true });
+    const existing = db.findUserByEmail(cleanEmail);
+    if (existing) {
+      const mEmail = maskEmail(existing.email);
+      return res.status(409).json({
+        error: `An account already exists with ${existing.email}. Please log in or reset your password.`,
+        alreadyRegistered: true,
+        existingAccount: {
+          email: existing.email,
+          maskedEmail: mEmail,
+          rollNo: existing.rollNo || null,
+          authProvider: existing.authProvider || 'password'
+        }
+      });
     }
 
     const otp = String(crypto.randomInt(100000, 1000000));
-    const otpHash = crypto.createHash('sha256').update(`${phoneDigits}:${otp}`).digest('hex');
-    pendingPhoneOtps.set(phoneDigits, {
+    const otpHash = crypto.createHash('sha256').update(`${cleanEmail}:${otp}`).digest('hex');
+
+    await sendRegistrationOtpEmail(cleanEmail, otp);
+
+    pendingEmailOtps.set(cleanEmail, {
       otpHash,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: Date.now() + 10 * 60 * 1000,
       attempts: 0
     });
 
-    const smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': apiKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        variables_values: otp,
-        route: 'otp',
-        numbers: phoneDigits
-      })
-    });
-    if (!smsRes.ok) {
-      return res.status(502).json({ error: 'SMS gateway error sending OTP.' });
-    }
+    const otpToken = signScopedToken({
+      purpose: 'reg_email_otp',
+      email: cleanEmail,
+      otpHash
+    }, '10m');
 
-    security.logSecurityEvent('REGISTER_SMS_OTP_SENT', req, { phoneMasked: maskPhone(phoneDigits) });
-    res.json({ sent: true, useFirebasePhone: false, message: `OTP sent to ******${phoneDigits.slice(-4)}.` });
+    security.logSecurityEvent('REGISTER_EMAIL_OTP_SENT', req, { emailMasked: maskEmail(cleanEmail) });
+    res.json({
+      sent: true,
+      otpToken,
+      message: `Verification code sent to ${maskEmail(cleanEmail)}. Valid for 10 minutes.`
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to send mobile OTP.' });
+    console.error('Send register email OTP error:', err);
+    res.status(err.statusCode || 500).json({
+      error: err.message || 'Failed to send email verification code.'
+    });
   }
 });
 
-// Register a new student (requires verified Mobile OTP via Firebase Phone Token or SMS OTP)
+// Verify 6-digit Email Verification Code before completing registration
+router.post('/verify-register-otp', security.authRegisterLimiter, (req, res) => {
+  try {
+    const cleanEmail = String((req.body && req.body.email) || '').trim().toLowerCase();
+    const otp = String((req.body && req.body.otp) || '').trim();
+    const otpToken = req.body && req.body.otpToken;
+
+    if (!cleanEmail || !security.isValidEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Please enter the 6-digit verification code sent to your email.' });
+    }
+
+    const rec = pendingEmailOtps.get(cleanEmail);
+    if (rec) {
+      rec.attempts += 1;
+      if (rec.attempts > 5) {
+        pendingEmailOtps.delete(cleanEmail);
+        return res.status(429).json({ error: 'Too many invalid attempts. Please request a new verification code.' });
+      }
+    }
+
+    const decoded = otpToken ? verifyScopedToken(otpToken) : null;
+    const expectedHash = (decoded && decoded.purpose === 'reg_email_otp' && decoded.email === cleanEmail)
+      ? decoded.otpHash
+      : (rec && Date.now() <= rec.expiresAt ? rec.otpHash : null);
+
+    if (!expectedHash) {
+      return res.status(400).json({ error: 'Verification code expired or not requested. Please request a new code.' });
+    }
+
+    const suppliedHash = crypto.createHash('sha256').update(`${cleanEmail}:${otp}`).digest('hex');
+    if (suppliedHash !== expectedHash) {
+      return res.status(401).json({ error: 'Invalid verification code. Please check your email and try again.' });
+    }
+
+    pendingEmailOtps.delete(cleanEmail);
+    const emailVerifiedToken = signScopedToken({
+      purpose: 'reg_email_verified',
+      email: cleanEmail
+    }, '15m');
+
+    res.json({
+      verified: true,
+      emailVerifiedToken,
+      message: 'Email verified successfully! You can now complete your registration.'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to verify email code.' });
+  }
+});
+
+// Register a new student (requires verified Email OTP)
 router.post('/register', security.authRegisterLimiter, async (req, res) => {
   try {
-    const { name, email, password, targetExam, force, phone, phoneIdToken, phoneOtp } = req.body;
+    const { name, email, password, targetExam, force, phone, emailVerifiedToken, emailOtp, otpToken } = req.body;
 
     if (!name || !email || !password || !phone) {
       return res.status(400).json({ error: 'Name, email, 10-digit mobile number, and password are required' });
@@ -224,7 +354,7 @@ router.post('/register', security.authRegisterLimiter, async (req, res) => {
     }
 
     if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
-      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number for OTP verification' });
+      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number' });
     }
 
     const { existing, matchedByEmail } = findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits);
@@ -247,41 +377,35 @@ router.post('/register', security.authRegisterLimiter, async (req, res) => {
       return res.status(400).json({ error: pwError });
     }
 
-    // Verify Mobile OTP (either Firebase Phone ID Token OR Backend SMS OTP)
-    let phoneVerifiedVia = null;
-    if (phoneIdToken && typeof phoneIdToken === 'string') {
-      const fbAuth = firebase.getAuth();
-      if (!fbAuth) {
-        return res.status(503).json({ error: 'Firebase Phone verification unavailable.' });
+    // Verify Email OTP (either pre-verified token OR emailOtp + otpToken)
+    let emailVerified = false;
+    if (emailVerifiedToken && typeof emailVerifiedToken === 'string') {
+      const decoded = verifyScopedToken(emailVerifiedToken);
+      if (!decoded || decoded.purpose !== 'reg_email_verified' || decoded.email !== cleanEmail) {
+        return res.status(401).json({ error: 'Email verification expired or does not match. Please verify your email again.' });
       }
-      const decodedPhone = await fbAuth.verifyIdToken(phoneIdToken).catch(() => null);
-      const tokenDigits = decodedPhone && decodedPhone.phone_number
-        ? String(decodedPhone.phone_number).replace(/\D/g, '').slice(-10)
-        : '';
-      if (!tokenDigits || tokenDigits !== phoneDigits) {
-        return res.status(401).json({ error: 'Mobile OTP verification failed: phone number mismatch.' });
+      emailVerified = true;
+    } else if (emailOtp && typeof emailOtp === 'string') {
+      const rec = pendingEmailOtps.get(cleanEmail);
+      const decoded = otpToken ? verifyScopedToken(otpToken) : null;
+      const expectedHash = (decoded && decoded.purpose === 'reg_email_otp' && decoded.email === cleanEmail)
+        ? decoded.otpHash
+        : (rec && Date.now() <= rec.expiresAt ? rec.otpHash : null);
+      if (!expectedHash) {
+        return res.status(400).json({ error: 'Email verification code expired or not requested. Please request a new code.' });
       }
-      phoneVerifiedVia = 'FIREBASE_PHONE';
-    } else if (phoneOtp && typeof phoneOtp === 'string') {
-      const rec = pendingPhoneOtps.get(phoneDigits);
-      if (!rec || Date.now() > rec.expiresAt) {
-        return res.status(400).json({ error: 'Mobile OTP expired or not requested. Please request a new OTP.' });
+      const suppliedHash = crypto.createHash('sha256').update(`${cleanEmail}:${String(emailOtp).trim()}`).digest('hex');
+      if (suppliedHash !== expectedHash) {
+        return res.status(401).json({ error: 'Invalid email verification code entered.' });
       }
-      rec.attempts += 1;
-      if (rec.attempts > 5) {
-        pendingPhoneOtps.delete(phoneDigits);
-        return res.status(429).json({ error: 'Too many invalid OTP attempts. Please request a new OTP.' });
-      }
-      const suppliedHash = crypto.createHash('sha256').update(`${phoneDigits}:${String(phoneOtp).trim()}`).digest('hex');
-      if (suppliedHash !== rec.otpHash) {
-        return res.status(401).json({ error: 'Invalid mobile OTP entered.' });
-      }
-      pendingPhoneOtps.delete(phoneDigits);
-      phoneVerifiedVia = 'SMS_OTP';
-    } else {
+      pendingEmailOtps.delete(cleanEmail);
+      emailVerified = true;
+    }
+
+    if (!emailVerified) {
       return res.status(400).json({
-        error: 'Mobile OTP verification is required to create your candidate account.',
-        requiresPhoneOtp: true
+        error: 'Email verification code is required to create your candidate account.',
+        requiresEmailOtp: true
       });
     }
 
@@ -299,8 +423,8 @@ router.post('/register', security.authRegisterLimiter, async (req, res) => {
       password: hashPassword(password),
       role: 'student',
       authProvider: 'password',
-      phoneVerified: true,
-      phoneVerifiedVia,
+      emailVerified: true,
+      emailVerifiedVia: 'EMAIL_OTP',
       tokenVersion: 1,
       disabled: false,
       targetExam: cleanTargetExam,

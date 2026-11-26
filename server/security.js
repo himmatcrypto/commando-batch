@@ -48,12 +48,12 @@ function securityHeaders(req, res, next) {
 
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://accounts.google.com https://sdk.cashfree.com",
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://accounts.google.com https://sdk.cashfree.com https://www.google.com",
     "script-src-attr 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https:",
-    "frame-src 'self' https://studenthub-f3414.firebaseapp.com https://accounts.google.com https://*.cashfree.com",
+    "frame-src 'self' https://studenthub-f3414.firebaseapp.com https://accounts.google.com https://*.cashfree.com https://www.google.com https://recaptcha.google.com",
     "connect-src 'self' https://commandobatch.in https://www.commandobatch.in https://studenthub-f3414.web.app https://studenthub-f3414.firebaseapp.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.cashfree.com",
     "frame-ancestors 'none'",
     "object-src 'none'",

@@ -123,6 +123,20 @@ const API = (function () {
       return res;
     },
 
+    async checkRegisterEligibility(email, phone) {
+      return await request('/api/auth/check-register-eligibility', {
+        method: 'POST',
+        body: JSON.stringify({ email, phone })
+      });
+    },
+
+    async sendRegisterOtp(phone) {
+      return await request('/api/auth/send-register-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone })
+      });
+    },
+
     async register(data) {
       const res = await request('/api/auth/register', {
         method: 'POST',

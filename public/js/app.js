@@ -716,6 +716,145 @@ const App = (function () {
     }
   }
 
+  let regConfirmationResult = null;
+  let regVerifiedPhoneIdToken = null;
+  let regVerifiedPhoneNumber = null;
+  let regUseBackendOtp = false;
+  let regRecaptchaVerifier = null;
+
+  function resetRegOtpState() {
+    regConfirmationResult = null;
+    regVerifiedPhoneIdToken = null;
+    regVerifiedPhoneNumber = null;
+    regUseBackendOtp = false;
+    const otpGroup = document.getElementById('regOtpGroup');
+    const verifiedBadge = document.getElementById('regOtpVerifiedBadge');
+    const otpInput = document.getElementById('regOtpCode');
+    const phoneInput = document.getElementById('regPhone');
+    if (otpGroup) otpGroup.style.display = 'none';
+    if (verifiedBadge) verifiedBadge.style.display = 'none';
+    if (otpInput) otpInput.value = '';
+    if (phoneInput) phoneInput.readOnly = false;
+  }
+
+  function showDuplicateAccountBox(info, typedEmail) {
+    const dupAlert = document.getElementById('regDuplicateAlert');
+    if (!dupAlert) return;
+    const loginHint = info.email || info.maskedEmail || typedEmail;
+    const prefill = info.email || '';
+    dupAlert.innerHTML = `
+      <div style="font-weight: 700; color: #fca5a5; margin-bottom: 0.35rem;">
+        ⚠️ Account Already Exists!
+      </div>
+      <p style="margin: 0 0 0.65rem 0; line-height: 1.45;">
+        You already registered previously with <strong>${escapeHtml(loginHint)}</strong>${info.rollNo ? ` (Roll: <code>${escapeHtml(info.rollNo)}</code>)` : ''}. Please log in or reset your password instead of creating a duplicate account.
+      </p>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button type="button" class="btn-3d" style="padding: 0.4rem 0.85rem; font-size: 0.8rem;" onclick="App.setAuthMode('forgot', '${escapeHtml(prefill)}')">
+          🔑 Reset Password
+        </button>
+        <button type="button" class="btn-demo-pill" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; border-color: #38bdf8; color: #38bdf8;" onclick="App.setAuthMode('login', '${escapeHtml(prefill)}')">
+          ➡️ Go to Login
+        </button>
+      </div>
+    `;
+    dupAlert.style.display = 'block';
+  }
+
+  async function sendRegisterOtp() {
+    const email = (document.getElementById('regEmail')?.value || '').trim();
+    const rawPhone = (document.getElementById('regPhone')?.value || '').replace(/\D/g, '').slice(-10);
+    const dupAlert = document.getElementById('regDuplicateAlert');
+    if (dupAlert) { dupAlert.style.display = 'none'; dupAlert.innerHTML = ''; }
+
+    if (!email) {
+      showToast('Please enter your Email Address first.', 'warning');
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(rawPhone)) {
+      showToast('Please enter a valid 10-digit Indian mobile number.', 'warning');
+      return;
+    }
+
+    try {
+      showToast('Checking account & sending Mobile OTP...', 'info');
+      await API.checkRegisterEligibility(email, rawPhone);
+
+      const otpInit = await API.sendRegisterOtp(rawPhone);
+      if (otpInit && !otpInit.useFirebasePhone) {
+        regUseBackendOtp = true;
+        document.getElementById('regOtpGroup').style.display = 'block';
+        document.getElementById('regOtpStatus').textContent = otpInit.message || `OTP sent to +91-${rawPhone}`;
+        showToast(otpInit.message || 'OTP sent to your mobile!', 'success');
+        return;
+      }
+
+      // Firebase Phone Auth OTP
+      if (!window.CommandoFirebase || !window.CommandoFirebase.isReady()) {
+        window.CommandoFirebase && window.CommandoFirebase.init();
+      }
+      const fbAuth = window.CommandoFirebase && window.CommandoFirebase.getAuth();
+      if (!fbAuth || typeof firebase === 'undefined' || !firebase.auth) {
+        throw new Error('Firebase Phone Auth SDK is unavailable. Please refresh and try again.');
+      }
+
+      if (!regRecaptchaVerifier) {
+        regRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('regRecaptchaContainer', { size: 'invisible' });
+      }
+      regConfirmationResult = await fbAuth.signInWithPhoneNumber(`+91${rawPhone}`, regRecaptchaVerifier);
+      regUseBackendOtp = false;
+      document.getElementById('regOtpGroup').style.display = 'block';
+      document.getElementById('regOtpStatus').textContent = `SMS OTP sent to +91-${rawPhone}. Valid for 5 minutes.`;
+      showToast(`📲 OTP sent to +91-${rawPhone}!`, 'success');
+    } catch (err) {
+      if (err.data && err.data.alreadyRegistered) {
+        showDuplicateAccountBox(err.data.existingAccount || {}, email);
+      }
+      const msg = err.code === 'auth/operation-not-allowed'
+        ? 'Enable "Phone" under Firebase Console → Authentication → Sign-in method to send free SMS OTPs.'
+        : (err.message || 'Unable to send OTP.');
+      showToast(msg, 'error');
+    }
+  }
+
+  async function verifyRegisterOtp() {
+    const rawPhone = (document.getElementById('regPhone')?.value || '').replace(/\D/g, '').slice(-10);
+    const otpCode = (document.getElementById('regOtpCode')?.value || '').trim();
+    if (!/^\d{6}$/.test(otpCode)) {
+      showToast('Please enter the 6-digit OTP received on your mobile.', 'warning');
+      return false;
+    }
+
+    if (regUseBackendOtp) {
+      regVerifiedPhoneNumber = rawPhone;
+      document.getElementById('regOtpGroup').style.display = 'none';
+      document.getElementById('regOtpVerifiedBadge').style.display = 'block';
+      document.getElementById('regPhone').readOnly = true;
+      showToast('Mobile OTP ready for account creation!', 'success');
+      return true;
+    }
+
+    if (!regConfirmationResult) {
+      showToast('Please click "Send OTP" first.', 'warning');
+      return false;
+    }
+
+    try {
+      showToast('Verifying mobile OTP...', 'info');
+      const cred = await regConfirmationResult.confirm(otpCode);
+      regVerifiedPhoneIdToken = await cred.user.getIdToken();
+      regVerifiedPhoneNumber = rawPhone;
+      document.getElementById('regOtpGroup').style.display = 'none';
+      document.getElementById('regOtpVerifiedBadge').style.display = 'block';
+      document.getElementById('regPhone').readOnly = true;
+      showToast('🟢 Mobile number verified! Click "Create Account" to finish.', 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Invalid OTP. Please check and try again.', 'error');
+      return false;
+    }
+  }
+
   async function handleRegister(e) {
     e.preventDefault();
     const name = document.getElementById('regName').value.trim();
@@ -723,13 +862,40 @@ const App = (function () {
     const password = document.getElementById('regPassword').value;
     const targetExam = document.getElementById('regTargetExam').value;
     const force = document.getElementById('regForce').value.trim();
-    const phone = document.getElementById('regPhone').value.trim();
+    const phone = document.getElementById('regPhone').value.replace(/\D/g, '').slice(-10);
+    const otpCode = (document.getElementById('regOtpCode')?.value || '').trim();
     const dupAlert = document.getElementById('regDuplicateAlert');
     if (dupAlert) { dupAlert.style.display = 'none'; dupAlert.innerHTML = ''; }
 
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
+
+    // Auto-verify OTP if user entered 6 digits and clicked Create Account directly
+    if (!regVerifiedPhoneIdToken && !regUseBackendOtp && regConfirmationResult && /^\d{6}$/.test(otpCode)) {
+      const ok = await verifyRegisterOtp();
+      if (!ok) return;
+    }
+
+    if (!regVerifiedPhoneIdToken && !(regUseBackendOtp && /^\d{6}$/.test(otpCode))) {
+      showToast('Please click "📲 Send OTP" and verify your mobile number first.', 'warning');
+      return;
+    }
+
     try {
       showToast('Creating candidate defense account...', 'info');
-      const res = await API.register({ name, email, password, targetExam, force, phone });
+      const res = await API.register({
+        name,
+        email,
+        password,
+        targetExam,
+        force,
+        phone,
+        phoneIdToken: regVerifiedPhoneIdToken || undefined,
+        phoneOtp: regUseBackendOtp ? otpCode : undefined
+      });
+      resetRegOtpState();
       updateAuthUI();
       closeAuthModal();
       showToast(`Account registered successfully! Assigned Roll: ${res.user.rollNo}`, 'success');
@@ -745,27 +911,8 @@ const App = (function () {
         showSecurityWarningModal(res.securityWarning);
       }
     } catch (err) {
-      if (err.data && err.data.alreadyRegistered && dupAlert) {
-        const info = err.data.existingAccount || {};
-        const loginHint = info.email || info.maskedEmail || email;
-        const prefill = info.email || '';
-        dupAlert.innerHTML = `
-          <div style="font-weight: 700; color: #fca5a5; margin-bottom: 0.35rem;">
-            ⚠️ Account Already Exists!
-          </div>
-          <p style="margin: 0 0 0.65rem 0; line-height: 1.45;">
-            You already registered previously with <strong>${escapeHtml(loginHint)}</strong>${info.rollNo ? ` (Roll: <code>${escapeHtml(info.rollNo)}</code>)` : ''}. Please log in or reset your password instead of creating a duplicate account.
-          </p>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <button type="button" class="btn-3d" style="padding: 0.4rem 0.85rem; font-size: 0.8rem;" onclick="App.setAuthMode('forgot', '${escapeHtml(prefill)}')">
-              🔑 Reset Password
-            </button>
-            <button type="button" class="btn-demo-pill" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; border-color: #38bdf8; color: #38bdf8;" onclick="App.setAuthMode('login', '${escapeHtml(prefill)}')">
-              ➡️ Go to Login
-            </button>
-          </div>
-        `;
-        dupAlert.style.display = 'block';
+      if (err.data && err.data.alreadyRegistered) {
+        showDuplicateAccountBox(err.data.existingAccount || {}, email);
       }
       showToast(err.message || 'Registration failed.', 'error');
     }
@@ -1640,6 +1787,8 @@ const App = (function () {
     handleLogin,
     handleAdminLogin,
     handleRegister,
+    sendRegisterOtp,
+    verifyRegisterOtp,
     handleForgotLookup,
     handleResetPassword,
     handleGoogleAuth,

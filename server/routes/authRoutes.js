@@ -105,13 +105,109 @@ function bindDeviceAndEnforcePolicy(req, user) {
   return { sessionId: newSessionId, deviceId: cleanDeviceId, securityWarning, updatedUser };
 }
 
-// Register a new student (with duplicate email/phone detection prompting previous login & reset)
-router.post('/register', security.authRegisterLimiter, (req, res) => {
-  try {
-    const { name, email, password, targetExam, force, phone } = req.body;
+// In-memory store for optional backend SMS OTP fallback (5 min TTL, max 5 tries)
+const pendingPhoneOtps = new Map();
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Name, email, and password are required' });
+function findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits) {
+  const existingByEmail = cleanEmail ? db.findUserByEmail(cleanEmail) : null;
+  const existingByPhone = (!existingByEmail && phoneDigits && phoneDigits.length === 10)
+    ? (db.getDb().users || []).find(u => {
+        const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+        return uDigits.length === 10 && uDigits === phoneDigits;
+      })
+    : null;
+  return {
+    existing: existingByEmail || existingByPhone,
+    matchedByEmail: !!existingByEmail
+  };
+}
+
+// Pre-check before sending Mobile OTP (prevents wasting SMS on already-registered accounts)
+router.post('/check-register-eligibility', security.authRegisterLimiter, (req, res) => {
+  try {
+    const { email, phone } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const phoneDigits = String(phone || '').replace(/\D/g, '').slice(-10);
+
+    if (!cleanEmail || !security.isValidEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      return res.status(400).json({ error: 'Please enter a valid 10-digit Indian mobile number.' });
+    }
+
+    const { existing, matchedByEmail } = findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits);
+    if (existing) {
+      const mEmail = maskEmail(existing.email);
+      return res.status(409).json({
+        error: `An account already exists with your previous login (${matchedByEmail ? existing.email : mEmail}). Please log in or reset your password.`,
+        alreadyRegistered: true,
+        existingAccount: {
+          email: matchedByEmail ? existing.email : null,
+          maskedEmail: mEmail,
+          rollNo: existing.rollNo || null,
+          authProvider: existing.authProvider || 'password'
+        }
+      });
+    }
+
+    res.json({ eligible: true, phone: phoneDigits });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to verify registration eligibility.' });
+  }
+});
+
+// Optional backend SMS OTP sender (uses Fast2SMS if configured; otherwise signals Firebase Phone Auth)
+router.post('/send-register-otp', security.authRegisterLimiter, async (req, res) => {
+  try {
+    const phoneDigits = String((req.body && req.body.phone) || '').replace(/\D/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      return res.status(400).json({ error: 'Please enter a valid 10-digit Indian mobile number.' });
+    }
+
+    const apiKey = process.env.FAST2SMS_API_KEY;
+    if (!apiKey) {
+      return res.json({ useFirebasePhone: true });
+    }
+
+    const otp = String(crypto.randomInt(100000, 1000000));
+    const otpHash = crypto.createHash('sha256').update(`${phoneDigits}:${otp}`).digest('hex');
+    pendingPhoneOtps.set(phoneDigits, {
+      otpHash,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      attempts: 0
+    });
+
+    const smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+      method: 'POST',
+      headers: {
+        'authorization': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        variables_values: otp,
+        route: 'otp',
+        numbers: phoneDigits
+      })
+    });
+    if (!smsRes.ok) {
+      return res.status(502).json({ error: 'SMS gateway error sending OTP.' });
+    }
+
+    security.logSecurityEvent('REGISTER_SMS_OTP_SENT', req, { phoneMasked: maskPhone(phoneDigits) });
+    res.json({ sent: true, useFirebasePhone: false, message: `OTP sent to ******${phoneDigits.slice(-4)}.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send mobile OTP.' });
+  }
+});
+
+// Register a new student (requires verified Mobile OTP via Firebase Phone Token or SMS OTP)
+router.post('/register', security.authRegisterLimiter, async (req, res) => {
+  try {
+    const { name, email, password, targetExam, force, phone, phoneIdToken, phoneOtp } = req.body;
+
+    if (!name || !email || !password || !phone) {
+      return res.status(400).json({ error: 'Name, email, 10-digit mobile number, and password are required' });
     }
 
     const cleanName = String(name).trim();
@@ -127,18 +223,13 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid email address' });
     }
 
-    const existingByEmail = db.findUserByEmail(cleanEmail);
-    const existingByPhone = (!existingByEmail && phoneDigits.length === 10)
-      ? (db.getDb().users || []).find(u => {
-          const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
-          return uDigits.length === 10 && uDigits === phoneDigits;
-        })
-      : null;
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number for OTP verification' });
+    }
 
-    const existing = existingByEmail || existingByPhone;
+    const { existing, matchedByEmail } = findExistingAccountByEmailOrPhone(cleanEmail, phoneDigits);
     if (existing) {
       const mEmail = maskEmail(existing.email);
-      const matchedByEmail = !!existingByEmail;
       return res.status(409).json({
         error: `An account already exists with your previous login (${matchedByEmail ? existing.email : mEmail}). Please log in or reset your password.`,
         alreadyRegistered: true,
@@ -156,6 +247,44 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
       return res.status(400).json({ error: pwError });
     }
 
+    // Verify Mobile OTP (either Firebase Phone ID Token OR Backend SMS OTP)
+    let phoneVerifiedVia = null;
+    if (phoneIdToken && typeof phoneIdToken === 'string') {
+      const fbAuth = firebase.getAuth();
+      if (!fbAuth) {
+        return res.status(503).json({ error: 'Firebase Phone verification unavailable.' });
+      }
+      const decodedPhone = await fbAuth.verifyIdToken(phoneIdToken).catch(() => null);
+      const tokenDigits = decodedPhone && decodedPhone.phone_number
+        ? String(decodedPhone.phone_number).replace(/\D/g, '').slice(-10)
+        : '';
+      if (!tokenDigits || tokenDigits !== phoneDigits) {
+        return res.status(401).json({ error: 'Mobile OTP verification failed: phone number mismatch.' });
+      }
+      phoneVerifiedVia = 'FIREBASE_PHONE';
+    } else if (phoneOtp && typeof phoneOtp === 'string') {
+      const rec = pendingPhoneOtps.get(phoneDigits);
+      if (!rec || Date.now() > rec.expiresAt) {
+        return res.status(400).json({ error: 'Mobile OTP expired or not requested. Please request a new OTP.' });
+      }
+      rec.attempts += 1;
+      if (rec.attempts > 5) {
+        pendingPhoneOtps.delete(phoneDigits);
+        return res.status(429).json({ error: 'Too many invalid OTP attempts. Please request a new OTP.' });
+      }
+      const suppliedHash = crypto.createHash('sha256').update(`${phoneDigits}:${String(phoneOtp).trim()}`).digest('hex');
+      if (suppliedHash !== rec.otpHash) {
+        return res.status(401).json({ error: 'Invalid mobile OTP entered.' });
+      }
+      pendingPhoneOtps.delete(phoneDigits);
+      phoneVerifiedVia = 'SMS_OTP';
+    } else {
+      return res.status(400).json({
+        error: 'Mobile OTP verification is required to create your candidate account.',
+        requiresPhoneOtp: true
+      });
+    }
+
     const cleanTargetExam = String(targetExam || 'LDCE').trim().slice(0, 40);
     const cleanForce = String(force || 'Paramilitary Forces').trim().slice(0, 60);
 
@@ -170,11 +299,13 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
       password: hashPassword(password),
       role: 'student',
       authProvider: 'password',
+      phoneVerified: true,
+      phoneVerifiedVia,
       tokenVersion: 1,
       disabled: false,
       targetExam: cleanTargetExam,
       force: cleanForce,
-      phone: cleanPhone,
+      phone: phoneDigits,
       rollNo,
       createdAt: new Date().toISOString()
     };

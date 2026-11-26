@@ -993,10 +993,17 @@ const App = (function () {
   function getEnrollmentPricing(durationMonths, targetForce) {
     const isAll = (targetForce || '').toUpperCase() === 'ALL';
     const is6m = Number(durationMonths) === 6;
+    const basePrice = is6m ? (isAll ? 550 : 199) : (isAll ? 300 : 100);
+    const gstRate = 18;
+    const gstAmount = Math.round(basePrice * 0.18 * 100) / 100;
+    const price = Math.round((basePrice + gstAmount) * 100) / 100;
 
     if (is6m) {
       return {
-        price: isAll ? 550 : 199,
+        basePrice,
+        gstRate,
+        gstAmount,
+        price,
         testsCount: isAll ? 60 : 10,
         name: isAll ? 'Commando All-Force Pro Pass (All 60 Full-Length Mocks)' : `Commando Pro Pass (${targetForce} Special - 10 Tests)`,
         duration: '6 Months Validity',
@@ -1004,7 +1011,10 @@ const App = (function () {
       };
     } else {
       return {
-        price: isAll ? 300 : 100,
+        basePrice,
+        gstRate,
+        gstAmount,
+        price,
         testsCount: isAll ? 60 : 10,
         name: isAll ? 'Tactical All-Force Pass (All 60 Full-Length Mocks)' : `Tactical Pass (${targetForce} Special - 10 Tests)`,
         duration: '2 Months Validity',
@@ -1022,18 +1032,22 @@ const App = (function () {
     const targetForce = forceSelect.value;
     const info = getEnrollmentPricing(durationMonths, targetForce);
 
+    const basePriceDisplay = document.getElementById('enrollmentBasePriceDisplay');
+    const gstDisplay = document.getElementById('enrollmentGstDisplay');
     const priceDisplay = document.getElementById('enrollmentPriceDisplay');
     const quotaDisplay = document.getElementById('enrollmentQuotaDisplay');
     const planNameDisplay = document.getElementById('enrollmentPlanNameDisplay');
     const validityDisplay = document.getElementById('enrollmentValidityDisplay');
     const payBtn = document.getElementById('enrollmentPayBtn');
 
-    if (priceDisplay) priceDisplay.textContent = `₹${info.price} Only`;
+    if (basePriceDisplay) basePriceDisplay.textContent = `₹${info.basePrice}`;
+    if (gstDisplay) gstDisplay.textContent = `+ ₹${info.gstAmount}`;
+    if (priceDisplay) priceDisplay.textContent = `₹${info.price} (Incl. 18% GST)`;
     if (quotaDisplay) quotaDisplay.textContent = `${info.testsCount} Full-Length CBT Tests ${targetForce === 'ALL' ? '(All Forces)' : '(' + targetForce + ')'}`;
     if (planNameDisplay) planNameDisplay.textContent = info.name;
     if (validityDisplay) validityDisplay.textContent = info.duration;
     if (payBtn) {
-      payBtn.innerHTML = `⚡ Pay ₹${info.price} & Activate Pass`;
+      payBtn.innerHTML = `⚡ Pay ₹${info.price} (Incl. GST) & Activate Pass`;
       payBtn.setAttribute('data-pkg-id', info.packageId);
     }
   }
@@ -1126,8 +1140,16 @@ const App = (function () {
           <span id="enrollmentValidityDisplay" style="font-weight: 600; color: #fff;">${initialPricing.duration}</span>
         </div>
         <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">Base Plan Price</span>
+          <span id="enrollmentBasePriceDisplay" style="font-weight: 600; color: #fff;">₹${initialPricing.basePrice}</span>
+        </div>
+        <div class="enrollment-summary-row">
+          <span style="color: #94a3b8;">GST (18%)</span>
+          <span id="enrollmentGstDisplay" style="font-weight: 600; color: #cbd5e1;">+ ₹${initialPricing.gstAmount}</span>
+        </div>
+        <div class="enrollment-summary-row">
           <span>Total Payable Amount</span>
-          <span id="enrollmentPriceDisplay" style="color: #fbbf24; font-size: 1.15rem; font-weight: 800;">₹${initialPricing.price} Only</span>
+          <span id="enrollmentPriceDisplay" style="color: #fbbf24; font-size: 1.15rem; font-weight: 800;">₹${initialPricing.price} (Incl. 18% GST)</span>
         </div>
       </div>
 
@@ -1152,7 +1174,7 @@ const App = (function () {
       <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
         <button class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
         <button class="btn-3d btn-3d-success" id="enrollmentPayBtn" data-pkg-id="${initialPricing.packageId}" style="flex: 2; font-size: 1rem;" onclick="App.confirmPackageEnrollment()">
-          ⚡ Pay ₹${initialPricing.price} & Activate Pass
+          ⚡ Pay ₹${initialPricing.price} (Incl. GST) & Activate Pass
         </button>
       </div>
     `;
@@ -1321,7 +1343,7 @@ const App = (function () {
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Amount Paid</span>
-            <span class="receipt-val" style="color: #ffffff; font-weight: 700;">₹${pkg.price} (Cashfree Verified)</span>
+            <span class="receipt-val" style="color: #ffffff; font-weight: 700;">₹${pkg.price} (Incl. 18% GST • Cashfree Verified)</span>
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Transaction Reference</span>

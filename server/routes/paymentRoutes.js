@@ -76,6 +76,11 @@ function computePackageOffer(packageId, targetForce, durationMonths) {
   const isAllForces = forceName === 'ALL';
   const is6Months = packageId === 'pkg_199_6m' || packageId === 'pkg_all_6m' || Number(durationMonths) === 6;
 
+  const basePrice = is6Months ? (isAllForces ? 550 : 199) : (isAllForces ? 300 : 100);
+  const gstRate = 18;
+  const gstAmount = Math.round(basePrice * 0.18 * 100) / 100;
+  const totalPayable = Math.round((basePrice + gstAmount) * 100) / 100;
+
   if (is6Months) {
     return {
       id: isAllForces ? 'pkg_all_6m' : 'pkg_199_6m',
@@ -83,7 +88,10 @@ function computePackageOffer(packageId, targetForce, durationMonths) {
         ? 'Commando All-Force Pro Pass (All 60 Full-Length Mocks - 6 Months)'
         : `Commando Pro Pass (${forceName} Special - 10 Full-Length Tests - 6 Months)`,
       targetForce: isAllForces ? 'ALL' : forceName,
-      price: isAllForces ? 550 : 199,
+      basePrice,
+      gstRate,
+      gstAmount,
+      price: totalPayable,
       testsCount: isAllForces ? 60 : 10,
       durationMonths: 6
     };
@@ -95,7 +103,10 @@ function computePackageOffer(packageId, targetForce, durationMonths) {
       ? 'Tactical All-Force Pass (All 60 Full-Length Mocks - 2 Months)'
       : `Tactical Pass (${forceName} Special - 10 Full-Length Tests - 2 Months)`,
     targetForce: isAllForces ? 'ALL' : forceName,
-    price: isAllForces ? 300 : 100,
+    basePrice,
+    gstRate,
+    gstAmount,
+    price: totalPayable,
     testsCount: isAllForces ? 60 : 10,
     durationMonths: 2
   };
@@ -109,6 +120,9 @@ function activatePackageForOrder(order, cfOrder, cfPaymentId) {
     id: order.packageId,
     name: order.packageName,
     targetForce: order.targetForce,
+    basePrice: order.basePrice || order.amount,
+    gstRate: order.gstRate || 18,
+    gstAmount: order.gstAmount || 0,
     price: order.amount,
     testsCount: order.testsCount,
     testsRemaining: order.testsCount,
@@ -216,6 +230,9 @@ router.post('/create-order', requireAuth, async (req, res) => {
       packageId: offer.id,
       packageName: offer.name,
       targetForce: offer.targetForce,
+      basePrice: offer.basePrice,
+      gstRate: offer.gstRate,
+      gstAmount: offer.gstAmount,
       amount: offer.price,
       currency: 'INR',
       testsCount: offer.testsCount,
@@ -226,12 +243,15 @@ router.post('/create-order', requireAuth, async (req, res) => {
     };
 
     db.createOrder(orderRecord);
-    security.logSecurityEvent('CASHFREE_ORDER_CREATED', req, { orderId, userId: user.id, amount: offer.price });
+    security.logSecurityEvent('CASHFREE_ORDER_CREATED', req, { orderId, userId: user.id, amount: offer.price, gstAmount: offer.gstAmount });
 
     res.status(201).json({
       orderId,
       paymentSessionId: cfData.payment_session_id,
       mode: cfg.env,
+      basePrice: offer.basePrice,
+      gstRate: offer.gstRate,
+      gstAmount: offer.gstAmount,
       amount: offer.price,
       packageName: offer.name
     });

@@ -4,7 +4,7 @@
  */
 
 const App = (function () {
-  let currentCategory = 'all';
+  let currentCategory = 'free';
   let allTests = [];
   let authCallback = null;
 
@@ -25,8 +25,8 @@ const App = (function () {
     // Initialize CAPF Combat Background Slideshow
     try { initCombatSlider(); } catch (e) { console.warn('initCombatSlider error:', e); }
 
-    // Load initial mock tests
-    await loadTests('all');
+    // Load initial mock tests (show 3 Free Mocks tab first on homepage)
+    await loadTests('free');
 
     // Enable 3D tilt effects
     try { setup3DTilt(); } catch (e) { console.warn('setup3DTilt error:', e); }
@@ -186,7 +186,7 @@ const App = (function () {
     checkPausedSession();
   }
 
-  async function loadTests(category = 'all') {
+  async function loadTests(category = currentCategory || 'free') {
     currentCategory = category;
     updateCategoryPills(category);
 

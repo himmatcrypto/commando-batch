@@ -4,9 +4,7 @@ const { hashPassword } = require('./auth');
 function getSeedData() {
   // Never seed weak predictable passwords in source code
   const bootstrapAdminSecret = process.env.INITIAL_ADMIN_PASSWORD || crypto.randomBytes(18).toString('base64url') + '!9A';
-  const bootstrapStudentSecret = process.env.INITIAL_STUDENT_PASSWORD || crypto.randomBytes(14).toString('base64url') + '!7S';
   const adminPassword = hashPassword(bootstrapAdminSecret);
-  const studentPassword = hashPassword(bootstrapStudentSecret);
 
   const defaultUsers = [
     {
@@ -19,72 +17,6 @@ function getSeedData() {
       force: 'Paramilitary HQ',
       rollNo: 'HQ-ADM-001',
       createdAt: '2026-01-01T00:00:00.000Z'
-    },
-    {
-      id: 'usr_student_bsf',
-      name: 'Sub-Inspector Rakesh Kumar',
-      email: 'bsf@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'BSF SI/Exe LDCE',
-      force: 'BSF (Border Security Force)',
-      rollNo: 'BSF-2026-1920',
-      createdAt: '2026-01-10T08:00:00.000Z'
-    },
-    {
-      id: 'usr_student_itbp',
-      name: 'Inspector Tenzing Norbu',
-      email: 'itbp@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'ITBP SI/GD LDCE',
-      force: 'ITBP (Indo-Tibetan Border Police)',
-      rollNo: 'ITBP-2026-3042',
-      createdAt: '2026-01-12T10:15:00.000Z'
-    },
-    {
-      id: 'usr_student_ar',
-      name: 'Havildar David Sailo',
-      email: 'assamrifles@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'Assam Rifles LDCE',
-      force: 'Assam Rifles (Sentinels of Northeast)',
-      rollNo: 'AR-2026-4410',
-      createdAt: '2026-01-14T11:20:00.000Z'
-    },
-    {
-      id: 'usr_student_crpf',
-      name: 'Assistant Commandant Amit Singh',
-      email: 'crpf@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'CRPF SI (GD) LDCE',
-      force: 'CRPF (Central Reserve Police Force)',
-      rollNo: 'CRPF-2026-5521',
-      createdAt: '2026-01-15T09:00:00.000Z'
-    },
-    {
-      id: 'usr_student_cisf',
-      name: 'Constable Vikas Sharma',
-      email: 'commando@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'CISF ASI/Exe LDCE',
-      force: 'CISF (Central Industrial Security Force)',
-      rollNo: 'CISF-2026-8842',
-      createdAt: '2026-01-15T09:30:00.000Z'
-    },
-    {
-      id: 'usr_student_ssc',
-      name: 'Sub-Inspector Aspirant Rahul Verma',
-      email: 'rahul@student.in',
-      password: studentPassword,
-      role: 'student',
-      targetExam: 'SSC CPO SI',
-      force: 'Delhi Police / CAPF SI',
-      rollNo: 'SSC-2026-9014',
-      createdAt: '2026-02-01T14:15:00.000Z'
     }
   ];
 

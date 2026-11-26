@@ -281,16 +281,16 @@ router.post('/:id/submit', (req, res) => {
     const percentageMarks = test.totalMarks > 0 ? Math.round((totalScore / test.totalMarks) * 100) : 0;
     const isQualified = totalScore >= (test.passingMarks || (test.totalMarks * 0.45));
 
-    // Calculate All-India Rank & Percentile relative to all test attempts
+    // Calculate All-India Rank & Percentile from the paper's 150 stored benchmark marks (10-99) + real attempts
+    const benchmarkMarks = db.ensureTestBenchmarkMarks(test);
     const allAttemptsForTest = db.getAllAttempts().filter(a => a.testId === test.id);
-    const higherScoreCount = allAttemptsForTest.filter(a => a.score > totalScore).length;
+    const peerScores = [...benchmarkMarks, ...allAttemptsForTest.map(a => Number(a.score) || 0)];
+    const higherScoreCount = peerScores.filter(s => s > totalScore).length;
     const rank = higherScoreCount + 1;
-    const totalAspirants = allAttemptsForTest.length + 1;
+    const totalAspirants = peerScores.length + 1;
 
-    const belowCount = allAttemptsForTest.filter(a => a.score < totalScore).length;
-    const percentile = totalAspirants > 1
-      ? Math.round(((belowCount + 1) / totalAspirants) * 1000) / 10
-      : (totalScore >= test.passingMarks ? 92.5 : 74.0);
+    const belowCount = peerScores.filter(s => s < totalScore).length;
+    const percentile = Math.round(((belowCount + 1) / totalAspirants) * 1000) / 10;
 
     const attemptRecord = {
       id: 'att_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),

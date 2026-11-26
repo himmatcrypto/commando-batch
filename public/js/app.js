@@ -569,7 +569,7 @@ const App = (function () {
                         <td style="color: #34d399; font-weight: 700;">+${posM}</td>
                         <td style="color: #f87171; font-weight: 700;">-${negM}</td>
                         <td>
-                          <span class="rank-badge-pill">👑 Rank #${a.rank || 1}</span>
+                          <span class="rank-badge-pill">👑 Rank #${a.rank || 1}${a.totalAspirants ? ` / ${a.totalAspirants}` : ''}</span>
                         </td>
                         <td style="color: #38bdf8; font-weight: 700;">${a.accuracy}%</td>
                         <td>

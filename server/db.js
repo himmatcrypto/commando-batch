@@ -1,6 +1,37 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const firebase = require('./firebase');
+
+const DUMMY_STUDENT_IDS = new Set([
+  'usr_student_bsf',
+  'usr_student_itbp',
+  'usr_student_ar',
+  'usr_student_crpf',
+  'usr_student_cisf',
+  'usr_student_ssc'
+]);
+
+function generateBenchmarkMarks(count = 150, min = 10, max = 99) {
+  const marks = [];
+  for (let i = 0; i < count; i++) {
+    marks.push(crypto.randomInt(min, max + 1));
+  }
+  return marks;
+}
+
+function ensureTestBenchmarkMarks(test, persist = true) {
+  if (!test) return [];
+  if (Array.isArray(test.benchmarkMarks) && test.benchmarkMarks.length === 150) {
+    return test.benchmarkMarks;
+  }
+  test.benchmarkMarks = generateBenchmarkMarks(150, 10, 99);
+  if (persist) {
+    saveDatabase();
+    syncDocToFirestore('tests', test.id, test);
+  }
+  return test.benchmarkMarks;
+}
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
@@ -119,12 +150,27 @@ async function initFirebaseSync() {
       fsDb.collection('device_bindings').get()
     ]);
 
-    if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
-    if (!allTestsSnap.empty) db.tests = allTestsSnap.docs.map(d => d.data());
-    if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
-    if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
-    if (!ordersSnap.empty) db.orders = ordersSnap.docs.map(d => d.data());
-    if (!devSnap.empty) db.deviceBindings = devSnap.docs.map(d => d.data());
+      if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
+      if (!allTestsSnap.empty) db.tests = allTestsSnap.docs.map(d => d.data());
+      if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
+      if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
+      if (!ordersSnap.empty) db.orders = ordersSnap.docs.map(d => d.data());
+      if (!devSnap.empty) db.deviceBindings = devSnap.docs.map(d => d.data());
+
+      // Remove seeded dummy candidates from both memory and Firestore
+      const hadDummy = (db.users || []).some(u => DUMMY_STUDENT_IDS.has(u.id));
+      if (hadDummy) {
+        db.users = (db.users || []).filter(u => !DUMMY_STUDENT_IDS.has(u.id));
+        for (const dummyId of DUMMY_STUDENT_IDS) {
+          deleteDocFromFirestore('users', dummyId);
+        }
+      }
+
+      // Ensure every separate paper has 150 stored benchmark marks (range 10-99)
+      for (const t of (db.tests || [])) {
+        ensureTestBenchmarkMarks(t, true);
+      }
+
       saveDatabase();
       console.log(`🔥 Synced from Cloud Firestore: ${db.users.length} users, ${db.tests.length} tests, ${db.attempts.length} attempts.`);
     }
@@ -142,6 +188,7 @@ module.exports = {
   saveDb: saveDatabase,
   initFirebaseSync,
   syncAllToFirestore,
+  ensureTestBenchmarkMarks,
   // Helper queries
   findUserByEmail: (email) => {
     return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -191,6 +238,9 @@ module.exports = {
     return db.tests.find(t => t.id === id);
   },
   createTest: (testData) => {
+    if (!Array.isArray(testData.benchmarkMarks) || testData.benchmarkMarks.length !== 150) {
+      testData.benchmarkMarks = generateBenchmarkMarks(150, 10, 99);
+    }
     db.tests.push(testData);
     saveDatabase();
     syncDocToFirestore('tests', testData.id, testData);

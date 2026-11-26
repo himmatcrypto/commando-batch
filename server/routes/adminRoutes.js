@@ -5,6 +5,8 @@ const firebase = require('../firebase');
 const security = require('../security');
 const { requireAdmin, isSecretReady } = require('../auth');
 const { getCashfreeConfig, clearCashfreeConfigCache } = require('./paymentRoutes');
+const { getEmailConfig, clearEmailConfigCache } = require('./authRoutes');
+const nodemailer = require('nodemailer');
 const { getSeedData } = require('../seedData');
 
 // Protect all admin routes
@@ -418,6 +420,95 @@ router.post('/payments/cashfree-config', async (req, res) => {
   } catch (err) {
     console.error('Cashfree config save error:', err);
     res.status(500).json({ error: 'Failed to save Cashfree configuration.' });
+  }
+});
+
+// Admin: Email OTP Configuration Status (never exposes password or API key)
+router.get('/email-config', async (req, res) => {
+  const cfg = await getEmailConfig();
+  res.json({
+    configured: !!cfg.configured,
+    provider: cfg.provider || 'gmail',
+    host: cfg.host || 'smtp.gmail.com',
+    port: cfg.port || 587,
+    userMasked: cfg.user ? cfg.user.replace(/(^..).*(@.*$)/, '$1***$2') : null,
+    from: cfg.from || ''
+  });
+});
+
+// Admin: Save & Verify Email OTP Credentials (Gmail App Password / SMTP / Resend) in Firestore settings/email
+router.post('/email-config', async (req, res) => {
+  try {
+    const { provider, user, pass, host, port, from, resendApiKey } = req.body;
+    const cleanProvider = ['gmail', 'smtp', 'resend'].includes(String(provider).toLowerCase())
+      ? String(provider).toLowerCase()
+      : 'gmail';
+
+    if (!firebase.isConnected()) {
+      return res.status(503).json({ error: 'Cloud Firestore is not connected.' });
+    }
+
+    let docPayload = {
+      provider: cleanProvider,
+      updatedBy: req.user.email,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (cleanProvider === 'resend') {
+      const cleanKey = String(resendApiKey || '').trim();
+      if (!cleanKey || cleanKey.length < 10) {
+        return res.status(400).json({ error: 'Valid Resend API key is required.' });
+      }
+      docPayload = {
+        ...docPayload,
+        resendApiKey: cleanKey,
+        from: String(from || '').trim() || 'Commando Batch <onboarding@resend.dev>',
+        user: '',
+        pass: '',
+        host: ''
+      };
+    } else {
+      const cleanUser = String(user || '').trim();
+      const cleanPass = String(pass || '').replace(/\s+/g, '');
+      const cleanHost = cleanProvider === 'gmail' ? 'smtp.gmail.com' : String(host || '').trim();
+      const cleanPort = Number(port || 587);
+
+      if (!cleanUser || !cleanPass || !cleanHost) {
+        return res.status(400).json({ error: 'Email/Username, Password (App Password), and SMTP Host are required.' });
+      }
+
+      // Verify SMTP login before saving
+      const transporter = nodemailer.createTransport({
+        host: cleanHost,
+        port: cleanPort,
+        secure: cleanPort === 465,
+        auth: { user: cleanUser, pass: cleanPass }
+      });
+      await transporter.verify();
+
+      docPayload = {
+        ...docPayload,
+        host: cleanHost,
+        port: cleanPort,
+        user: cleanUser,
+        pass: cleanPass,
+        from: String(from || '').trim() || `"Commando Batch" <${cleanUser}>`,
+        resendApiKey: ''
+      };
+    }
+
+    await firebase.getFirestore().collection('settings').doc('email').set(docPayload, { merge: true });
+    clearEmailConfigCache();
+    security.logSecurityEvent('EMAIL_CONFIG_UPDATED', req, { provider: cleanProvider, adminEmail: req.user.email });
+
+    res.json({
+      message: `Email OTP (${cleanProvider.toUpperCase()}) verified & saved in Firestore!`,
+      configured: true,
+      provider: cleanProvider
+    });
+  } catch (err) {
+    console.error('Email config save error:', err);
+    res.status(400).json({ error: err.message || 'SMTP verification failed. Check your email & App Password.' });
   }
 });
 

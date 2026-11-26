@@ -36,6 +36,9 @@ const App = (function () {
 
     // Update packages status for active pass
     try { updatePackagesUI(); } catch (e) { console.warn('updatePackagesUI error:', e); }
+
+    // Complete Google Sign-In redirect flow if returning from mobile Safari/Chrome redirect
+    try { await handleGoogleRedirectResult(); } catch (e) { console.warn('Google redirect check:', e); }
   }
 
   function setupEventListeners() {
@@ -611,13 +614,15 @@ const App = (function () {
     if (modal) modal.classList.remove('active');
   }
 
-  function setAuthMode(mode) {
+  function setAuthMode(mode, prefillEmail = '') {
     const tabLogin = document.getElementById('authTabLogin');
     const tabAdminLogin = document.getElementById('authTabAdminLogin');
     const tabRegister = document.getElementById('authTabRegister');
     const formLogin = document.getElementById('formLogin');
     const formAdminLogin = document.getElementById('formAdminLogin');
     const formRegister = document.getElementById('formRegister');
+    const formForgot = document.getElementById('formForgotPassword');
+    const dupAlert = document.getElementById('regDuplicateAlert');
 
     if (tabLogin) tabLogin.classList.remove('active');
     if (tabAdminLogin) tabAdminLogin.classList.remove('active');
@@ -626,6 +631,8 @@ const App = (function () {
     if (formLogin) formLogin.style.display = 'none';
     if (formAdminLogin) formAdminLogin.style.display = 'none';
     if (formRegister) formRegister.style.display = 'none';
+    if (formForgot) formForgot.style.display = 'none';
+    if (dupAlert) { dupAlert.style.display = 'none'; dupAlert.innerHTML = ''; }
 
     if (mode === 'admin-login') {
       if (tabAdminLogin) tabAdminLogin.classList.add('active');
@@ -633,9 +640,19 @@ const App = (function () {
     } else if (mode === 'register') {
       if (tabRegister) tabRegister.classList.add('active');
       if (formRegister) formRegister.style.display = 'block';
+    } else if (mode === 'forgot') {
+      if (formForgot) formForgot.style.display = 'block';
+      const step1 = document.getElementById('forgotStep1Form');
+      const step2 = document.getElementById('forgotStep2Form');
+      const forgotEmailInput = document.getElementById('forgotEmail');
+      if (step1) step1.style.display = 'block';
+      if (step2) step2.style.display = 'none';
+      if (forgotEmailInput && prefillEmail) forgotEmailInput.value = prefillEmail;
     } else {
       if (tabLogin) tabLogin.classList.add('active');
       if (formLogin) formLogin.style.display = 'block';
+      const loginEmailInput = document.getElementById('loginEmail');
+      if (loginEmailInput && prefillEmail) loginEmailInput.value = prefillEmail;
     }
   }
 
@@ -700,6 +717,8 @@ const App = (function () {
     const targetExam = document.getElementById('regTargetExam').value;
     const force = document.getElementById('regForce').value.trim();
     const phone = document.getElementById('regPhone').value.trim();
+    const dupAlert = document.getElementById('regDuplicateAlert');
+    if (dupAlert) { dupAlert.style.display = 'none'; dupAlert.innerHTML = ''; }
 
     try {
       showToast('Creating candidate defense account...', 'info');
@@ -715,7 +734,135 @@ const App = (function () {
         switchView('studentView');
       }
     } catch (err) {
+      if (err.data && err.data.alreadyRegistered && dupAlert) {
+        const info = err.data.existingAccount || {};
+        const loginHint = info.email || info.maskedEmail || email;
+        const prefill = info.email || '';
+        dupAlert.innerHTML = `
+          <div style="font-weight: 700; color: #fca5a5; margin-bottom: 0.35rem;">
+            ⚠️ Account Already Exists!
+          </div>
+          <p style="margin: 0 0 0.65rem 0; line-height: 1.45;">
+            You already registered previously with <strong>${escapeHtml(loginHint)}</strong>${info.rollNo ? ` (Roll: <code>${escapeHtml(info.rollNo)}</code>)` : ''}. Please log in or reset your password instead of creating a duplicate account.
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button type="button" class="btn-3d" style="padding: 0.4rem 0.85rem; font-size: 0.8rem;" onclick="App.setAuthMode('forgot', '${escapeHtml(prefill)}')">
+              🔑 Reset Password
+            </button>
+            <button type="button" class="btn-demo-pill" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; border-color: #38bdf8; color: #38bdf8;" onclick="App.setAuthMode('login', '${escapeHtml(prefill)}')">
+              ➡️ Go to Login
+            </button>
+          </div>
+        `;
+        dupAlert.style.display = 'block';
+      }
       showToast(err.message || 'Registration failed.', 'error');
+    }
+  }
+
+  let activeResetEmail = '';
+
+  async function handleForgotLookup(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgotEmail').value.trim();
+    try {
+      showToast('Checking candidate account...', 'info');
+      const res = await API.forgotPassword(email);
+      activeResetEmail = res.hints.email;
+      const hintsBox = document.getElementById('forgotHintsBox');
+      if (hintsBox) {
+        const parts = [];
+        if (res.hints.rollNoHint) parts.push(`Roll No: <strong>${escapeHtml(res.hints.rollNoHint)}</strong>`);
+        if (res.hints.maskedPhone) parts.push(`Phone: <strong>${escapeHtml(res.hints.maskedPhone)}</strong>`);
+        hintsBox.innerHTML = `
+          <div>Account Found: <strong>${escapeHtml(res.hints.email)}</strong></div>
+          <div style="margin-top: 0.25rem;">Verify using ${parts.join(' or ') || 'your Roll Number'}.</div>
+          ${res.hints.authProvider === 'google' ? '<div style="margin-top:0.25rem; color:#fde047;">Tip: You can also sign in directly using the Google button.</div>' : ''}
+        `;
+      }
+      document.getElementById('forgotStep1Form').style.display = 'none';
+      document.getElementById('forgotStep2Form').style.display = 'block';
+      showToast('Account verified! Enter your Roll No or Phone to reset password.', 'success');
+    } catch (err) {
+      showToast(err.message || 'Unable to locate candidate account.', 'error');
+    }
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    const verificationValue = document.getElementById('resetVerifyInput').value.trim();
+    const newPassword = document.getElementById('resetNewPassword').value;
+    try {
+      showToast('Updating password...', 'info');
+      const res = await API.resetPassword(activeResetEmail, verificationValue, newPassword);
+      showToast(res.message || 'Password reset successful!', 'success');
+      setAuthMode('login', activeResetEmail);
+    } catch (err) {
+      showToast(err.message || 'Password reset failed.', 'error');
+    }
+  }
+
+  async function handleGoogleAuth() {
+    try {
+      if (!window.CommandoFirebase || !window.CommandoFirebase.isReady()) {
+        window.CommandoFirebase && window.CommandoFirebase.init();
+      }
+      const fbAuth = window.CommandoFirebase && window.CommandoFirebase.getAuth();
+      if (!fbAuth || typeof firebase === 'undefined' || !firebase.auth) {
+        throw new Error('Google Sign-In SDK is still loading. Please try again in a moment.');
+      }
+
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      showToast('Opening Google Sign-In...', 'info');
+
+      try {
+        const result = await fbAuth.signInWithPopup(provider);
+        const idToken = await result.user.getIdToken();
+        await completeGoogleServerLogin(idToken);
+      } catch (popupErr) {
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/operation-not-supported-in-this-environment') {
+          showToast('Redirecting to Google Sign-In...', 'info');
+          await fbAuth.signInWithRedirect(provider);
+          return;
+        }
+        throw popupErr;
+      }
+    } catch (err) {
+      console.error('Google Sign-In error:', err);
+      const msg = err.code === 'auth/popup-closed-by-user'
+        ? 'Google Sign-In cancelled.'
+        : (err.message || 'Google Sign-In failed. Ensure Google provider is enabled in Firebase Console.');
+      showToast(msg, 'error');
+    }
+  }
+
+  async function handleGoogleRedirectResult() {
+    const fbAuth = window.CommandoFirebase && window.CommandoFirebase.getAuth();
+    if (!fbAuth) return;
+    const result = await fbAuth.getRedirectResult();
+    if (result && result.user) {
+      const idToken = await result.user.getIdToken();
+      await completeGoogleServerLogin(idToken);
+    }
+  }
+
+  async function completeGoogleServerLogin(idToken) {
+    const targetExamEl = document.getElementById('regTargetExam');
+    const forceEl = document.getElementById('regForce');
+    const res = await API.googleAuth(
+      idToken,
+      targetExamEl ? targetExamEl.value : 'CAPF',
+      forceEl ? forceEl.value : 'Paramilitary Forces'
+    );
+    updateAuthUI();
+    closeAuthModal();
+    showToast(res.message || `Welcome, ${res.user.name}!`, 'success');
+    if (authCallback) {
+      authCallback();
+      authCallback = null;
+    } else {
+      switchView('studentView');
     }
   }
 
@@ -1386,6 +1533,9 @@ const App = (function () {
     handleLogin,
     handleAdminLogin,
     handleRegister,
+    handleForgotLookup,
+    handleResetPassword,
+    handleGoogleAuth,
     handleLogout,
     openGeneralModal,
     closeGeneralModal,

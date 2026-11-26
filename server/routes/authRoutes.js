@@ -1,6 +1,8 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const db = require('../db');
+const firebase = require('../firebase');
 const security = require('../security');
 const {
   hashPassword,
@@ -10,7 +12,29 @@ const {
   requireAuth
 } = require('../auth');
 
-// Register a new student (with strict rate limiting, validation & strong password policy)
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '***';
+  const [local, domain] = email.split('@');
+  const head = local.slice(0, Math.min(2, local.length));
+  const tail = local.length > 3 ? local.slice(-1) : '';
+  return `${head}***${tail}@${domain}`;
+}
+
+function maskPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 4) return null;
+  return '******' + digits.slice(-4);
+}
+
+function maskRollNo(rollNo) {
+  const parts = String(rollNo || '').split('-');
+  if (parts.length >= 3) {
+    return `${parts[0]}-****-${parts[parts.length - 1]}`;
+  }
+  return rollNo ? '****' + String(rollNo).slice(-4) : null;
+}
+
+// Register a new student (with duplicate email/phone detection prompting previous login & reset)
 router.post('/register', security.authRegisterLimiter, (req, res) => {
   try {
     const { name, email, password, targetExam, force, phone } = req.body;
@@ -21,6 +45,8 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
 
     const cleanName = String(name).trim();
     const cleanEmail = String(email).trim().toLowerCase();
+    const cleanPhone = String(phone || '').replace(/[^\d+\-\s]/g, '').trim().slice(0, 18);
+    const phoneDigits = cleanPhone.replace(/\D/g, '').slice(-10);
 
     if (cleanName.length < 2 || cleanName.length > 80) {
       return res.status(400).json({ error: 'Name must be between 2 and 80 characters' });
@@ -30,19 +56,37 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid email address' });
     }
 
+    const existingByEmail = db.findUserByEmail(cleanEmail);
+    const existingByPhone = (!existingByEmail && phoneDigits.length === 10)
+      ? (db.getDb().users || []).find(u => {
+          const uDigits = String(u.phone || '').replace(/\D/g, '').slice(-10);
+          return uDigits.length === 10 && uDigits === phoneDigits;
+        })
+      : null;
+
+    const existing = existingByEmail || existingByPhone;
+    if (existing) {
+      const mEmail = maskEmail(existing.email);
+      const matchedByEmail = !!existingByEmail;
+      return res.status(409).json({
+        error: `An account already exists with your previous login (${matchedByEmail ? existing.email : mEmail}). Please log in or reset your password.`,
+        alreadyRegistered: true,
+        existingAccount: {
+          email: matchedByEmail ? existing.email : null,
+          maskedEmail: mEmail,
+          rollNo: existing.rollNo || null,
+          authProvider: existing.authProvider || 'password'
+        }
+      });
+    }
+
     const pwError = security.validatePasswordStrength(password, false);
     if (pwError) {
       return res.status(400).json({ error: pwError });
     }
 
-    const existing = db.findUserByEmail(cleanEmail);
-    if (existing) {
-      return res.status(409).json({ error: 'An account with this email already exists' });
-    }
-
     const cleanTargetExam = String(targetExam || 'LDCE').trim().slice(0, 40);
     const cleanForce = String(force || 'Paramilitary Forces').trim().slice(0, 60);
-    const cleanPhone = String(phone || '').replace(/[^\d+\-\s]/g, '').trim().slice(0, 18);
 
     const rollRandom = Math.floor(1000 + Math.random() * 9000);
     const prefix = cleanTargetExam.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'CB';
@@ -54,6 +98,7 @@ router.post('/register', security.authRegisterLimiter, (req, res) => {
       email: cleanEmail,
       password: hashPassword(password),
       role: 'student',
+      authProvider: 'password',
       tokenVersion: 1,
       disabled: false,
       targetExam: cleanTargetExam,
@@ -165,6 +210,180 @@ router.post('/login', security.authLoginLimiter, (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// Candidate Forgot Password Step 1: Lookup candidate account & return masked verification hints
+router.post('/forgot-password', security.authLoginLimiter, (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !security.isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid registered email address' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = db.findUserByEmail(cleanEmail);
+    if (!user) {
+      return res.status(404).json({ error: 'No candidate account found with this email address.' });
+    }
+    if (user.role === 'admin') {
+      security.logSecurityEvent('ADMIN_SELF_RESET_BLOCKED', req, { email: cleanEmail });
+      return res.status(403).json({ error: 'Admin passwords cannot be reset through candidate self-service.' });
+    }
+
+    res.json({
+      message: 'Account located. Verify your Roll Number or registered Phone Number to set a new password.',
+      hints: {
+        email: cleanEmail,
+        maskedPhone: maskPhone(user.phone),
+        rollNoHint: maskRollNo(user.rollNo),
+        authProvider: user.authProvider || 'password'
+      }
+    });
+  } catch (err) {
+    console.error('Forgot password lookup error:', err);
+    res.status(500).json({ error: 'Unable to process password reset request' });
+  }
+});
+
+// Candidate Forgot Password Step 2: Verify Roll No or Phone & set new password
+router.post('/reset-password', security.authLoginLimiter, (req, res) => {
+  try {
+    const { email, verificationValue, newPassword } = req.body;
+    if (!email || !verificationValue || !newPassword) {
+      return res.status(400).json({ error: 'Email, Roll No / Phone verification, and new password are required' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const lockState = security.checkAccountLock(cleanEmail);
+    if (lockState.locked) {
+      return res.status(429).json({ error: lockState.message });
+    }
+
+    const user = db.findUserByEmail(cleanEmail);
+    if (!user || user.role === 'admin') {
+      security.recordFailedLogin(cleanEmail);
+      return res.status(400).json({ error: 'Invalid candidate account or verification details' });
+    }
+
+    const pwError = security.validatePasswordStrength(newPassword, false);
+    if (pwError) {
+      return res.status(400).json({ error: pwError });
+    }
+
+    const supplied = String(verificationValue).trim();
+    const rollMatch = user.rollNo && supplied.toUpperCase() === String(user.rollNo).trim().toUpperCase();
+    const suppliedDigits = supplied.replace(/\D/g, '');
+    const userPhoneDigits = String(user.phone || '').replace(/\D/g, '');
+    const phoneMatch = userPhoneDigits.length >= 10 && suppliedDigits.length >= 4 &&
+      (suppliedDigits === userPhoneDigits || suppliedDigits.slice(-10) === userPhoneDigits.slice(-10) ||
+       (suppliedDigits.length === 4 && suppliedDigits === userPhoneDigits.slice(-4)));
+
+    if (!rollMatch && !phoneMatch) {
+      const failState = security.recordFailedLogin(cleanEmail);
+      security.logSecurityEvent('PASSWORD_RESET_VERIFY_FAIL', req, { email: cleanEmail, attempts: failState.count });
+      return res.status(401).json({ error: 'Verification failed: Roll Number or Phone Number does not match our records.' });
+    }
+
+    security.clearFailedLogins(cleanEmail);
+    const newVersion = (user.tokenVersion || 1) + 1;
+    db.updateUser(user.id, {
+      password: hashPassword(newPassword),
+      tokenVersion: newVersion,
+      passwordChangedAt: new Date().toISOString()
+    });
+
+    security.logSecurityEvent('CANDIDATE_PASSWORD_RESET', req, { email: cleanEmail, userId: user.id });
+    res.json({
+      message: 'Password reset successful! You can now log in with your new password.',
+      email: cleanEmail
+    });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Candidate Google Sign-In / Sign-Up (Verifies Firebase ID Token server-side)
+router.post('/google', security.authLoginLimiter, async (req, res) => {
+  try {
+    const { idToken, targetExam, force } = req.body;
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(400).json({ error: 'Google ID token is required' });
+    }
+
+    const fbAuth = firebase.getAuth();
+    if (!fbAuth) {
+      return res.status(503).json({ error: 'Google Authentication service is currently unavailable' });
+    }
+
+    const decoded = await fbAuth.verifyIdToken(idToken);
+    if (!decoded || !decoded.email) {
+      return res.status(401).json({ error: 'Invalid Google account token' });
+    }
+
+    const cleanEmail = decoded.email.trim().toLowerCase();
+    let user = db.findUserByEmail(cleanEmail);
+    let isNewUser = false;
+
+    if (user) {
+      if (user.role === 'admin') {
+        security.logSecurityEvent('GOOGLE_ADMIN_LOGIN_BLOCKED', req, { email: cleanEmail });
+        return res.status(403).json({ error: 'HQ Admin accounts must sign in using Admin HQ Login.' });
+      }
+      if (user.disabled) {
+        return res.status(403).json({ error: 'This account has been suspended. Contact HQ Admin.' });
+      }
+      if (!user.googleUid) {
+        user = db.updateUser(user.id, { googleUid: decoded.uid });
+      }
+    } else {
+      isNewUser = true;
+      const cleanName = (decoded.name || cleanEmail.split('@')[0]).trim().slice(0, 80);
+      const cleanTargetExam = String(targetExam || 'CAPF').trim().slice(0, 40);
+      const cleanForce = String(force || 'Paramilitary Forces').trim().slice(0, 60);
+      const rollRandom = Math.floor(1000 + Math.random() * 9000);
+      const rollNo = `GGL-${new Date().getFullYear()}-${rollRandom}`;
+
+      const randomInternalPw = crypto.randomBytes(24).toString('base64url') + '!9G';
+      user = db.createUser({
+        id: 'usr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        name: cleanName,
+        email: cleanEmail,
+        password: hashPassword(randomInternalPw),
+        role: 'student',
+        authProvider: 'google',
+        googleUid: decoded.uid,
+        tokenVersion: 1,
+        disabled: false,
+        targetExam: cleanTargetExam,
+        force: cleanForce,
+        phone: '',
+        rollNo,
+        createdAt: new Date().toISOString()
+      });
+      security.logSecurityEvent('GOOGLE_USER_REGISTERED', req, { email: cleanEmail, userId: user.id });
+    }
+
+    const token = generateToken(user);
+    res.json({
+      message: isNewUser ? `Google Sign-Up successful! Assigned Roll: ${user.rollNo}` : `Welcome back, ${user.name}!`,
+      token,
+      isNewUser,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        targetExam: user.targetExam,
+        force: user.force,
+        rollNo: user.rollNo,
+        activePackage: user.activePackage || null
+      }
+    });
+  } catch (err) {
+    console.error('Google auth error:', err);
+    res.status(401).json({ error: 'Google Sign-In verification failed. Please try again.' });
   }
 });
 

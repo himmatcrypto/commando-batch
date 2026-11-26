@@ -38,7 +38,7 @@ function securityHeaders(req, res, next) {
   res.setHeader('X-XSS-Protection', '0');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
 
   const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
@@ -48,12 +48,13 @@ function securityHeaders(req, res, next) {
 
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com",
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://accounts.google.com",
     "script-src-attr 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https:",
-    "connect-src 'self' https://commandobatch.in https://www.commandobatch.in https://studenthub-f3414.web.app https://studenthub-f3414.firebaseapp.com https://*.googleapis.com",
+    "frame-src 'self' https://studenthub-f3414.firebaseapp.com https://accounts.google.com",
+    "connect-src 'self' https://commandobatch.in https://www.commandobatch.in https://studenthub-f3414.web.app https://studenthub-f3414.firebaseapp.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

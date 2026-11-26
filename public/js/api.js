@@ -55,7 +55,10 @@ const API = (function () {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.error || `HTTP error ${res.status}`);
+        const apiErr = new Error(data.error || `HTTP error ${res.status}`);
+        apiErr.status = res.status;
+        apiErr.data = data;
+        throw apiErr;
       }
 
       return data;
@@ -92,6 +95,30 @@ const API = (function () {
       setToken(res.token);
       setUser(res.user);
       return res;
+    },
+
+    async googleAuth(idToken, targetExam = null, force = null) {
+      const res = await request('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken, targetExam, force })
+      });
+      setToken(res.token);
+      setUser(res.user);
+      return res;
+    },
+
+    async forgotPassword(email) {
+      return await request('/api/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+    },
+
+    async resetPassword(email, verificationValue, newPassword) {
+      return await request('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ email, verificationValue, newPassword })
+      });
     },
 
     logout() {

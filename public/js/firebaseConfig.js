@@ -5,13 +5,13 @@
  */
 
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
-  measurementId: ""
+  apiKey: "AIzaSyAynFFHrg9cI5q1eu_07VnvEZLZyDm79ok",
+  authDomain: "studenthub-f3414.firebaseapp.com",
+  projectId: "studenthub-f3414",
+  storageBucket: "studenthub-f3414.firebasestorage.app",
+  messagingSenderId: "943176180410",
+  appId: "1:943176180410:web:e16fbd8e90115f45c71883",
+  measurementId: "G-JZ0Z6RNK8R"
 };
 
 window.CommandoFirebase = (function () {

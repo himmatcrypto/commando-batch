@@ -96,8 +96,11 @@ function ensureBootstrapped() {
   return bootstrapPromise;
 }
 
-// Trigger immediately on boot and await on any incoming API request
-ensureBootstrapped();
+// Bootstrap immediately when running standalone server; in Cloud Functions, bootstrap lazily
+// on first /api request so deployment code-analysis never times out.
+if (require.main === module) {
+  ensureBootstrapped();
+}
 app.use('/api', async (req, res, next) => {
   await ensureBootstrapped();
   next();

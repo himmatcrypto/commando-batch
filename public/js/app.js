@@ -39,6 +39,9 @@ const App = (function () {
 
     // Complete Google Sign-In redirect flow if returning from mobile Safari/Chrome redirect
     try { await handleGoogleRedirectResult(); } catch (e) { console.warn('Google redirect check:', e); }
+
+    // Verify Cashfree Payment return if redirected back with ?cf_order_id=...
+    try { await handleCashfreeReturnUrl(); } catch (e) { console.warn('Cashfree return check:', e); }
   }
 
   function setupEventListeners() {
@@ -1129,7 +1132,7 @@ const App = (function () {
       </div>
 
       <div style="margin: 1.25rem 0;">
-        <label style="color: #cbd5e1; font-size: 0.85rem; font-family: var(--font-military); letter-spacing: 1px;">SELECT SIMULATED DEFENSE PAYMENT GATEWAY:</label>
+        <label style="color: #cbd5e1; font-size: 0.85rem; font-family: var(--font-military); letter-spacing: 1px;">SECURE CASHFREE PAYMENT GATEWAY (UPI / CARDS / NETBANKING):</label>
         <div class="payment-options-grid">
           <div class="pay-option-card active" onclick="this.parentNode.querySelectorAll('.pay-option-card').forEach(c=>c.classList.remove('active')); this.classList.add('active');">
             <div class="pay-option-icon">📱</div>
@@ -1278,37 +1281,17 @@ const App = (function () {
     }
   }
 
-  async function confirmPackageEnrollment(overridePackageId = null) {
-    try {
-      const forceSelect = document.getElementById('enrollmentForceSelect');
-      const targetForce = forceSelect ? forceSelect.value : 'CRPF';
-      const durationEl = document.querySelector('input[name="enrollmentDuration"]:checked');
-      const durationMonths = durationEl ? parseInt(durationEl.value, 10) : 2;
-
-      const pricing = getEnrollmentPricing(durationMonths, targetForce);
-      const packageId = overridePackageId || pricing.packageId;
-
-      showToast(`Processing simulated payment of ₹${pricing.price} & activating ${pricing.name}...`, 'info');
-      const res = await API.subscribePackage(packageId, targetForce, durationMonths);
-
-      const pkg = res.package;
-      const user = res.user;
-
-      updateAuthUI();
-      updatePackagesUI();
-      loadTests(); // Refresh test cards so unlocked status reflects immediately
-
-      // Render official defense active pass confirmation modal
-      const receiptHtml = `
+  function renderCashfreeReceiptModal(pkg, user, fallbackForce = 'CAPF') {
+    const receiptHtml = `
         <div style="text-align: center; margin-bottom: 1.5rem;">
           <div style="width: 68px; height: 68px; border-radius: 50%; background: rgba(34, 197, 94, 0.15); border: 2px solid #22c55e; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem auto; font-size: 2.2rem; box-shadow: 0 0 25px rgba(34,197,94,0.3);">
             ✅
           </div>
           <div style="display: inline-block; background: rgba(34,197,94,0.15); border: 1px solid #22c55e; color: #4ade80; font-family: var(--font-military); font-weight: 800; font-size: 0.82rem; letter-spacing: 1.5px; padding: 0.25rem 0.85rem; border-radius: 999px; margin-bottom: 0.5rem;">
-            🟢 PAYMENT SUCCESSFUL • PASS ACTIVE
+            🟢 CASHFREE PAYMENT VERIFIED • PASS ACTIVE
           </div>
           <h2 style="color: #ffffff; font-size: 1.6rem; margin-top: 0.2rem;">${escapeHtml(pkg.name)}</h2>
-          <p style="color: #94a3b8; font-size: 0.88rem;">Official Defense CBT Exam Access has been permanently activated on your Roll Number for <strong>${escapeHtml(pkg.targetForce || targetForce)}</strong>.</p>
+          <p style="color: #94a3b8; font-size: 0.88rem;">Official Defense CBT Exam Access has been permanently activated on your Roll Number for <strong>${escapeHtml(pkg.targetForce || fallbackForce)}</strong>.</p>
         </div>
 
         <div class="active-pass-receipt-box">
@@ -1326,7 +1309,7 @@ const App = (function () {
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Target Force Unlocked</span>
-            <span class="receipt-val" style="color: #38bdf8; font-weight: 800;">🛡️ ${escapeHtml(pkg.targetForce || targetForce)}</span>
+            <span class="receipt-val" style="color: #38bdf8; font-weight: 800;">🛡️ ${escapeHtml(pkg.targetForce || fallbackForce)}</span>
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Mock Tests Quota</span>
@@ -1338,11 +1321,11 @@ const App = (function () {
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Amount Paid</span>
-            <span class="receipt-val" style="color: #ffffff; font-weight: 700;">₹${pkg.price} (Verified)</span>
+            <span class="receipt-val" style="color: #ffffff; font-weight: 700;">₹${pkg.price} (Cashfree Verified)</span>
           </div>
           <div class="receipt-row">
             <span class="receipt-label">Transaction Reference</span>
-            <span class="receipt-val" style="font-family: monospace; color: #93c5fd;">${escapeHtml(pkg.transactionId || 'TXN-CB-849201')}</span>
+            <span class="receipt-val" style="font-family: monospace; color: #93c5fd;">${escapeHtml(pkg.transactionId || pkg.orderId || 'CASHFREE-VERIFIED')}</span>
           </div>
         </div>
 
@@ -1356,8 +1339,72 @@ const App = (function () {
         </div>
       `;
 
-      openGeneralModal(receiptHtml);
-      showToast(`🎉 Payment Confirmed! ${pkg.name} is now ACTIVE.`, 'success');
+    openGeneralModal(receiptHtml);
+    showToast(`🎉 Payment Confirmed! ${pkg.name} is now ACTIVE.`, 'success');
+  }
+
+  async function handleCashfreeReturnUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const cfOrderId = params.get('cf_order_id');
+    if (!cfOrderId) return;
+
+    // Clean query string cleanly without reloading
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    if (!API.getToken()) return;
+    showToast('Verifying your Cashfree payment...', 'info');
+    try {
+      const res = await API.verifyCashfreeOrder(cfOrderId);
+      if (res && res.verified && res.package && res.user) {
+        updateAuthUI();
+        updatePackagesUI();
+        loadTests();
+        renderCashfreeReceiptModal(res.package, res.user);
+      }
+    } catch (err) {
+      showToast(err.message || 'Payment verification pending or incomplete.', 'warning');
+    }
+  }
+
+  async function confirmPackageEnrollment(overridePackageId = null) {
+    try {
+      const forceSelect = document.getElementById('enrollmentForceSelect');
+      const targetForce = forceSelect ? forceSelect.value : 'CRPF';
+      const durationEl = document.querySelector('input[name="enrollmentDuration"]:checked');
+      const durationMonths = durationEl ? parseInt(durationEl.value, 10) : 2;
+
+      const pricing = getEnrollmentPricing(durationMonths, targetForce);
+      const packageId = overridePackageId || pricing.packageId;
+
+      showToast(`Creating Cashfree payment order for ₹${pricing.price}...`, 'info');
+      const orderRes = await API.createCashfreeOrder(packageId, targetForce, durationMonths);
+
+      if (typeof window.Cashfree !== 'function') {
+        throw new Error('Cashfree Checkout SDK failed to load. Please refresh the page and try again.');
+      }
+
+      closeGeneralModal();
+      const cashfree = window.Cashfree({ mode: orderRes.mode || 'sandbox' });
+      const checkoutResult = await cashfree.checkout({
+        paymentSessionId: orderRes.paymentSessionId,
+        redirectTarget: '_modal'
+      });
+
+      if (checkoutResult && checkoutResult.error) {
+        throw new Error(checkoutResult.error.message || 'Cashfree payment cancelled or failed.');
+      }
+
+      showToast('Verifying Cashfree payment with server...', 'info');
+      const verifyRes = await API.verifyCashfreeOrder(orderRes.orderId);
+      if (!verifyRes || !verifyRes.verified) {
+        throw new Error('Payment could not be confirmed yet.');
+      }
+
+      updateAuthUI();
+      updatePackagesUI();
+      loadTests();
+      renderCashfreeReceiptModal(verifyRes.package, verifyRes.user, targetForce);
     } catch (err) {
       showToast(err.message || 'Payment activation failed. Please try again.', 'error');
     }

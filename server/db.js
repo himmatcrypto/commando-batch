@@ -15,6 +15,7 @@ let db = {
   tests: [],
   attempts: [],
   enquiries: [],
+  orders: [],
   settings: {
     siteName: 'Commando Batch - Defense & Competitive Exam Portal',
     announcement: 'CRPF & CISF LDCE 2026 and SSC CPO SI Mock Tests are LIVE! Realistic TCS iON CBT Mode Activated.'
@@ -108,17 +109,19 @@ async function initFirebaseSync() {
       const res = await syncAllToFirestore();
       console.log(`🔥 Migrated ${res.totalSynced} records to Cloud Firestore!`);
     } else {
-      const [usersSnap, allTestsSnap, attemptsSnap, enquiriesSnap] = await Promise.all([
-        fsDb.collection('users').get(),
-        fsDb.collection('tests').get(),
-        fsDb.collection('attempts').get(),
-        fsDb.collection('enquiries').get()
-      ]);
+    const [usersSnap, allTestsSnap, attemptsSnap, enquiriesSnap, ordersSnap] = await Promise.all([
+      fsDb.collection('users').get(),
+      fsDb.collection('tests').get(),
+      fsDb.collection('attempts').get(),
+      fsDb.collection('enquiries').get(),
+      fsDb.collection('orders').get()
+    ]);
 
-      if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
-      if (!allTestsSnap.empty) db.tests = allTestsSnap.docs.map(d => d.data());
-      if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
-      if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
+    if (!usersSnap.empty) db.users = usersSnap.docs.map(d => d.data());
+    if (!allTestsSnap.empty) db.tests = allTestsSnap.docs.map(d => d.data());
+    if (!attemptsSnap.empty) db.attempts = attemptsSnap.docs.map(d => d.data());
+    if (!enquiriesSnap.empty) db.enquiries = enquiriesSnap.docs.map(d => d.data());
+    if (!ordersSnap.empty) db.orders = ordersSnap.docs.map(d => d.data());
       saveDatabase();
       console.log(`🔥 Synced from Cloud Firestore: ${db.users.length} users, ${db.tests.length} tests, ${db.attempts.length} attempts.`);
     }
@@ -246,6 +249,32 @@ module.exports = {
       saveDatabase();
       syncDocToFirestore('enquiries', id, db.enquiries[idx]);
       return db.enquiries[idx];
+    }
+    return null;
+  },
+  getOrders: () => {
+    db.orders = db.orders || [];
+    return db.orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  },
+  getOrderById: (id) => {
+    db.orders = db.orders || [];
+    return db.orders.find(o => o.id === id || o.orderId === id);
+  },
+  createOrder: (orderData) => {
+    db.orders = db.orders || [];
+    db.orders.push(orderData);
+    saveDatabase();
+    syncDocToFirestore('orders', orderData.id, orderData);
+    return orderData;
+  },
+  updateOrder: (id, updates) => {
+    db.orders = db.orders || [];
+    const idx = db.orders.findIndex(o => o.id === id || o.orderId === id);
+    if (idx !== -1) {
+      db.orders[idx] = { ...db.orders[idx], ...updates, updatedAt: new Date().toISOString() };
+      saveDatabase();
+      syncDocToFirestore('orders', db.orders[idx].id, db.orders[idx]);
+      return db.orders[idx];
     }
     return null;
   }

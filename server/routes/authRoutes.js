@@ -459,9 +459,18 @@ router.get('/me', requireAuth, (req, res) => {
   });
 });
 
-// Subscribe to Mock Test Package (Single Force: ₹100/2m or ₹199/6m | All Forces: ₹300/2m or ₹550/6m)
-router.post('/subscribe-package', requireAuth, (req, res) => {
+// Subscribe to Mock Test Package — blocked when Cashfree is active so passes require verified payment
+router.post('/subscribe-package', requireAuth, async (req, res) => {
   try {
+    const { getCashfreeConfig } = require('./paymentRoutes');
+    const cfCfg = await getCashfreeConfig();
+    if (cfCfg || process.env.ALLOW_DEMO_CHECKOUT !== 'true') {
+      return res.status(403).json({
+        error: 'Direct unpaid activation is disabled. Please complete payment securely via Cashfree Checkout.',
+        useCashfree: true
+      });
+    }
+
     const { packageId, targetForce, durationMonths } = req.body;
     const allowedForces = new Set(['CRPF', 'CISF', 'BSF', 'ITBP', 'SSB', 'ASSAM RIFLES', 'ALL']);
     const rawForce = (targetForce && typeof targetForce === 'string') ? targetForce.trim() : 'CRPF';

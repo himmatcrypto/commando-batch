@@ -4,6 +4,7 @@ const db = require('../db');
 const firebase = require('../firebase');
 const security = require('../security');
 const { requireAdmin, isSecretReady } = require('../auth');
+const { getCashfreeConfig, clearCashfreeConfigCache } = require('./paymentRoutes');
 const { getSeedData } = require('../seedData');
 
 // Protect all admin routes
@@ -364,6 +365,65 @@ router.get('/security-audit', (req, res) => {
       audit: security.getSecurityAuditSummary()
     }
   });
+});
+
+// Admin: Cashfree Payment Gateway Status (never exposes secretKey)
+router.get('/payments/cashfree-config', async (req, res) => {
+  const cfg = await getCashfreeConfig();
+  const orders = db.getOrders ? db.getOrders() : [];
+  res.json({
+    configured: !!cfg,
+    env: cfg ? cfg.env : 'sandbox',
+    appIdMasked: cfg && cfg.appId ? `${cfg.appId.slice(0, 6)}...${cfg.appId.slice(-4)}` : null,
+    totalOrders: orders.length,
+    paidOrders: orders.filter(o => o.status === 'PAID').length
+  });
+});
+
+// Admin: Save / Rotate Cashfree App ID, Secret Key & Mode in locked Firestore settings/cashfree
+router.post('/payments/cashfree-config', async (req, res) => {
+  try {
+    const { appId, secretKey, env } = req.body;
+    if (!appId || !secretKey || typeof appId !== 'string' || typeof secretKey !== 'string') {
+      return res.status(400).json({ error: 'Cashfree App ID and Secret Key are required.' });
+    }
+    const cleanAppId = appId.trim();
+    const cleanSecret = secretKey.trim();
+    const cleanEnv = (String(env || 'sandbox').toLowerCase() === 'production') ? 'production' : 'sandbox';
+
+    if (cleanAppId.length < 6 || cleanSecret.length < 10) {
+      return res.status(400).json({ error: 'Invalid Cashfree App ID or Secret Key format.' });
+    }
+
+    if (!firebase.isConnected()) {
+      return res.status(503).json({ error: 'Cloud Firestore is not connected.' });
+    }
+
+    await firebase.getFirestore().collection('settings').doc('cashfree').set({
+      appId: cleanAppId,
+      secretKey: cleanSecret,
+      env: cleanEnv,
+      updatedBy: req.user.email,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    clearCashfreeConfigCache();
+    security.logSecurityEvent('CASHFREE_CONFIG_UPDATED', req, { env: cleanEnv, adminEmail: req.user.email });
+
+    res.json({
+      message: `Cashfree Payment Gateway (${cleanEnv.toUpperCase()}) configured & encrypted in Firestore!`,
+      configured: true,
+      env: cleanEnv
+    });
+  } catch (err) {
+    console.error('Cashfree config save error:', err);
+    res.status(500).json({ error: 'Failed to save Cashfree configuration.' });
+  }
+});
+
+// Admin: Get payment orders
+router.get('/orders', (req, res) => {
+  res.json({ orders: db.getOrders ? db.getOrders() : [] });
 });
 
 // Admin: Get Firebase connection status

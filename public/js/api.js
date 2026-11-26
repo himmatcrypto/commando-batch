@@ -141,6 +141,40 @@ const API = (function () {
       return res;
     },
 
+    // Cashfree Payments PG
+    async getCashfreeStatus() {
+      return await request('/api/payments/cashfree/status');
+    },
+
+    async createCashfreeOrder(packageId, targetForce, durationMonths) {
+      return await request('/api/payments/cashfree/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ packageId, targetForce, durationMonths })
+      });
+    },
+
+    async verifyCashfreeOrder(orderId) {
+      const res = await request('/api/payments/cashfree/verify-order', {
+        method: 'POST',
+        body: JSON.stringify({ orderId })
+      });
+      if (res.user) {
+        setUser(res.user);
+      }
+      return res;
+    },
+
+    async getAdminCashfreeConfig() {
+      return await request('/api/admin/payments/cashfree-config');
+    },
+
+    async saveAdminCashfreeConfig(appId, secretKey, env) {
+      return await request('/api/admin/payments/cashfree-config', {
+        method: 'POST',
+        body: JSON.stringify({ appId, secretKey, env })
+      });
+    },
+
     // Tests & CBT
     async getTests(category) {
       const q = category && category !== 'all' ? `?category=${category}` : '';

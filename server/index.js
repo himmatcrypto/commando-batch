@@ -12,6 +12,7 @@ const testRoutes = require('./routes/testRoutes');
 const attemptRoutes = require('./routes/attemptRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const enquiryRoutes = require('./routes/enquiryRoutes');
+const { router: paymentRoutes } = require('./routes/paymentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,7 +24,14 @@ app.set('trust proxy', 1);
 // Core Security Middleware (Headers, Origin-restricted CORS, Payload & Prototype-Pollution guards)
 app.use(security.securityHeaders);
 app.use(cors(security.corsOptions));
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({
+  limit: '5mb',
+  verify: (req, res, buf) => {
+    if (buf && buf.length) {
+      req.rawBody = buf.toString('utf8');
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(security.sanitizeBodyMiddleware);
 app.use('/api', security.apiGeneralLimiter);
@@ -101,6 +109,7 @@ app.use('/api/tests', testRoutes);
 app.use('/api/attempts', attemptRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/enquiries', enquiryRoutes);
+app.use('/api/payments/cashfree', paymentRoutes);
 
 // System health check (redacted minimal public status)
 app.get('/api/health', (req, res) => {

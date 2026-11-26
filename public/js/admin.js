@@ -71,6 +71,9 @@ const Admin = (function () {
           <button class="btn-3d btn-3d-success" onclick="Admin.openCreateTestModal()">
             + Create New Mock Test
           </button>
+          <button class="btn-demo-pill" style="border-color: #38bdf8; color: #38bdf8; font-weight: 700;" onclick="Admin.openCashfreeConfigModal()">
+            💳 Cashfree Setup
+          </button>
           <button class="btn-demo-pill" style="border-color: #f59e0b; color: #fbbf24; font-weight: 700;" onclick="Admin.syncFirebase()">
             🔥 Sync to Firestore
           </button>
@@ -1383,8 +1386,70 @@ const Admin = (function () {
       .replace(/'/g, '&#039;');
   }
 
+  async function openCashfreeConfigModal() {
+    try {
+      const cfg = await API.getAdminCashfreeConfig();
+      const html = `
+        <div style="margin-bottom: 1.25rem;">
+          <h2 style="color: #fff; font-size: 1.4rem;">💳 Cashfree Payment Gateway Configuration</h2>
+          <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem;">
+            Credentials are stored strictly server-side inside locked Cloud Firestore (<code>settings/cashfree</code>) and never exposed to browsers.
+          </p>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid ${cfg.configured ? '#22c55e' : '#f59e0b'}; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.15rem; font-size: 0.85rem;">
+          <div>Status: <strong style="color: ${cfg.configured ? '#4ade80' : '#fbbf24'};">${cfg.configured ? '🟢 CONFIGURED (' + escapeHtml(cfg.env.toUpperCase()) + ')' : '🟡 NOT CONFIGURED'}</strong></div>
+          ${cfg.appIdMasked ? `<div style="color:#cbd5e1; margin-top:0.2rem;">Active App ID: <code>${escapeHtml(cfg.appIdMasked)}</code> • Orders: <strong>${cfg.totalOrders || 0}</strong> (Paid: <strong>${cfg.paidOrders || 0}</strong>)</div>` : ''}
+          <div style="color:#94a3b8; font-size:0.78rem; margin-top:0.35rem;">Webhook URL: <code>https://commandobatch.in/api/payments/cashfree/webhook</code></div>
+        </div>
+
+        <form onsubmit="Admin.saveCashfreeConfig(event)">
+          <div class="form-group">
+            <label class="form-label">Environment Mode</label>
+            <select id="cfEnvSelect" class="form-select">
+              <option value="sandbox" ${cfg.env !== 'production' ? 'selected' : ''}>Sandbox (Test Mode)</option>
+              <option value="production" ${cfg.env === 'production' ? 'selected' : ''}>Production (Live UPI/Cards)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cashfree App ID (Client ID)</label>
+            <input type="text" id="cfAppIdInput" class="form-input" placeholder="e.g. TEST1234567890..." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cashfree Secret Key (Client Secret)</label>
+            <input type="password" id="cfSecretKeyInput" class="form-input" placeholder="cfsk_ma_prod_... or cfsk_ma_test_..." required>
+          </div>
+          <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+            <button type="button" class="btn-demo-pill" style="flex: 1;" onclick="App.closeGeneralModal()">Cancel</button>
+            <button type="submit" class="btn-3d btn-3d-success" style="flex: 2;">💾 Save Cashfree Keys</button>
+          </div>
+        </form>
+      `;
+      App.openGeneralModal(html);
+    } catch (err) {
+      App.showToast(err.message || 'Unable to load Cashfree status.', 'error');
+    }
+  }
+
+  async function saveCashfreeConfig(e) {
+    e.preventDefault();
+    const env = document.getElementById('cfEnvSelect').value;
+    const appId = document.getElementById('cfAppIdInput').value.trim();
+    const secretKey = document.getElementById('cfSecretKeyInput').value.trim();
+    try {
+      App.showToast('Saving Cashfree credentials...', 'info');
+      const res = await API.saveAdminCashfreeConfig(appId, secretKey, env);
+      App.closeGeneralModal();
+      App.showToast(res.message || 'Cashfree configuration saved!', 'success');
+    } catch (err) {
+      App.showToast(err.message || 'Failed to save Cashfree keys.', 'error');
+    }
+  }
+
   return {
     loadAdminDashboard,
+    openCashfreeConfigModal,
+    saveCashfreeConfig,
     switchAdminTab,
     openCreateTestModal,
     addQuestionForm,
